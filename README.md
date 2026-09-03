@@ -150,7 +150,7 @@ Open Prisma Studio:
 npm run db:studio
 ```
 
-The first migration, `add_user`, creates the `users` table for authentication data. Future migrations should add `Product`, `ProductVariant`, and later cart, wishlist, and order tables when those tasks are implemented. Migrations should be committed to Git because they document and reproduce database changes across environments. `prisma db push` is not the primary workflow because it bypasses versioned migration history.
+The first migration, `add_user`, creates the `users` table for authentication data. The `add_product_catalog_foundation` migration adds the product catalog tables. Future migrations should add cart, wishlist, and order tables when those tasks are implemented. Migrations should be committed to Git because they document and reproduce database changes across environments. `prisma db push` is not the primary workflow because it bypasses versioned migration history.
 
 ## User Data
 
@@ -184,6 +184,26 @@ npm run db:studio
 ```
 
 Registration is intentionally not included. The login endpoint and JWT authentication will be implemented later.
+
+## Product Catalog Data
+
+Products are stored in the `products` table. Each product has an integer `id`, required `title`, required full `description`, required `price`, `type`, `created_at`, and `updated_at`. `type` is `SIMPLE` by default and may also be `CONFIGURABLE`.
+
+Prices use PostgreSQL `DECIMAL(12,2)` through Prisma `Decimal` so money is stored exactly instead of as floating-point values. The backend reads authoritative prices from PostgreSQL. The frontend must not provide authoritative prices, and future cart and checkout totals will be calculated by the backend. API serialization for Prisma Decimal values will be handled when product APIs are added.
+
+Stock is stored only in `product_variants.stock_quantity`; `products` intentionally has no stock column. This gives every sellable item one inventory source of truth and avoids reconciling competing `Product.stock` and `ProductVariant.stock` values.
+
+Simple products use one internal default variant, typically with `label` set to `Default`, `is_default` set to true, and `stock_quantity` set to the available quantity. That default variant is not meant to appear as a required storefront choice. Configurable products use multiple selectable variants, such as future size or color combinations. Size and color option tables or values are intentionally deferred to a later task.
+
+`product_variants` belongs to `products` through `product_id`. Variants cannot exist without a product, and deleting a product cascades to its variants. Each variant has a globally unique `sku`, a per-product unique `(product_id, label)` pair, and database defaults for stock and timestamps.
+
+PostgreSQL blocks invalid catalog data at the database level: product prices cannot be negative, variant stock quantities cannot be negative, required fields are `NOT NULL`, SKUs are unique, and variants must reference an existing product.
+
+Create and apply the product catalog migration with:
+
+```bash
+npm run db:migrate -- --name add_product_catalog_foundation
+```
 
 ## Running The Applications
 

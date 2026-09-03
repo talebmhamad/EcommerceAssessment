@@ -30,6 +30,7 @@ model User {
 
 model Product {
   id          Int              @id @default(autoincrement())
+  slug        String           @unique @db.VarChar(160)
   title       String           @db.VarChar(200)
   description String           @db.Text
   price       Decimal          @db.Decimal(12, 2)

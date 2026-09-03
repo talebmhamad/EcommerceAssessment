@@ -2,7 +2,7 @@
 
 Phase 1 foundation for a mini e-commerce platform. This repository is a TypeScript npm monorepo with an independently runnable Next.js frontend and Express backend.
 
-Authentication, product APIs, cart APIs, wishlist APIs, checkout, and business seed data are intentionally deferred to later tasks.
+Authentication, product APIs, cart APIs, wishlist APIs, checkout, and order workflows are intentionally deferred to later tasks.
 
 ## Architecture
 
@@ -31,6 +31,7 @@ The project uses a modular monolith structure. That keeps the current assessment
 |-- backend/
 |   |-- prisma/
 |   |   |-- migrations/
+|   |   |-- seed-data/
 |   |   |-- schema.prisma
 |   |   `-- seed.ts
 |   |-- prisma7.config.ts
@@ -187,7 +188,7 @@ Registration is intentionally not included. The login endpoint and JWT authentic
 
 ## Product Catalog Data
 
-Products are stored in the `products` table. Each product has an integer `id`, required `title`, required full `description`, required `price`, `type`, `created_at`, and `updated_at`. `type` is `SIMPLE` by default and may also be `CONFIGURABLE`.
+Products are stored in the `products` table. Each product has an integer `id`, unique lowercase `slug`, required `title`, required full `description`, required `price`, `type`, `created_at`, and `updated_at`. `type` is `SIMPLE` by default and may also be `CONFIGURABLE`. The slug is used as a stable seed identity; titles are not unique.
 
 Prices use PostgreSQL `DECIMAL(12,2)` through Prisma `Decimal` so money is stored exactly instead of as floating-point values. The backend reads authoritative prices from PostgreSQL. The frontend must not provide authoritative prices, and future cart and checkout totals will be calculated by the backend. API serialization for Prisma Decimal values will be handled when product APIs are added.
 
@@ -195,7 +196,7 @@ Stock is stored only in `product_variants.stock_quantity`; `products` intentiona
 
 Product variants support one customer-selectable option dimension for this assessment. `option_type` is either `SIZE` or `COLOR`, while `option_value` remains a string so future products are not limited to a hard-coded enum of values. A shirt can use values such as `Small`, `Medium`, and `Large`; headphones can use values such as `Black`, `White`, and `Blue`. This avoids JSON blobs, comma-separated values, and a heavier option engine that the assessment does not require.
 
-Simple products use exactly one internal default variant, typically with `label` set to `Default`, `is_default` set to true, and both `option_type` and `option_value` set to null. That default variant is not meant to appear as a required storefront choice. Configurable products use selectable variants where `is_default` is false and both `option_type` and `option_value` are required. All variants for a configurable product should normally use the same option type; that cross-row rule is deferred to Task 6 seed validation, the future product service, and automated tests instead of database triggers.
+Simple products use exactly one internal default variant, typically with `label` set to `Default`, `is_default` set to true, and both `option_type` and `option_value` set to null. That default variant is not meant to appear as a required storefront choice. Configurable products use selectable variants where `is_default` is false and both `option_type` and `option_value` are required. All variants for a configurable product should normally use the same option type; that cross-row rule is handled by seed validation for the initial catalog and should also be enforced later by the product service and automated tests instead of database triggers.
 
 `product_variants` belongs to `products` through `product_id`. Variants cannot exist without a product, and deleting a product cascades to its variants. Each variant has a globally unique `sku`, a per-product unique `(product_id, option_type, option_value)` combination, a partial unique index that allows only one default variant per product, and database defaults for stock and timestamps.
 
@@ -203,7 +204,7 @@ PostgreSQL blocks invalid catalog data at the database level: product prices can
 
 Future cart items must reference `ProductVariant` by ID with `productVariantId Int` and a foreign-key relation. The cart should not identify selected stock by label, size text, color text, unvalidated SKU, or product ID alone. When the same product has different variants, each selected variant can become a separate cart line.
 
-The final product catalog seed is deferred to Task 6, where exactly 15 products will be added, including at least three products with multiple variants. No permanent product records are seeded by the variant model task.
+The initial product catalog seed is provided in Task 6 with exactly 15 products, including five products with multiple variants.
 
 Create and apply the product catalog migration with:
 
@@ -215,6 +216,39 @@ Complete the variant model with:
 
 ```bash
 npm run db:migrate -- --name complete_product_variant_model
+```
+
+Add stable product seed identity with:
+
+```bash
+npm run db:migrate -- --name add_product_slug
+```
+
+## Seeded Catalog
+
+Run the deterministic local seed with:
+
+```bash
+npm run db:seed
+```
+
+The seed keeps the demo user credentials:
+
+```text
+Email: demo@ecommerce.local
+Password: DemoUser@2026
+```
+
+It also creates the assessment catalog with exactly 15 products and 25 variants: 10 simple products with one internal default variant each, plus 5 configurable products with three variants each. Three configurable products use `SIZE` values and two use `COLOR` values.
+
+Internal default variants use `label = Default`, `is_default = true`, and null option fields, so simple products do not expose size or color choices. Configurable variants use independent stock values on `ProductVariant`, including high-stock, low-stock, and out-of-stock examples. Notable cases are Premium Notebook Set with stock 100, Everyday Hoodie Large with stock 1, Adjustable Phone Stand with stock 2, Classic Cotton T-Shirt Large with stock 0, and Wireless Headphones Blue with stock 0.
+
+Seed definitions live in `backend/prisma/seed-data/products.ts`. The seed validates counts, slug format and uniqueness, SKU uniqueness, price and stock nonnegativity, simple default variants, configurable option values, and duplicate option values before writing. Database writes run in a Prisma transaction and upsert products by stable slug and variants by globally unique SKU, so running the seed repeatedly updates the managed catalog without creating duplicates.
+
+Inspect local seeded data with:
+
+```bash
+npm run db:studio
 ```
 
 ## Running The Applications

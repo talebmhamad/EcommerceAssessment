@@ -14,13 +14,13 @@ export function createApp(): express.Express {
 
   app.disable("x-powered-by");
 
-  app.use(helmet());
-  app.use(compression());
-  app.use(express.json({ limit: config.requestBodyLimit }));
-  app.use(express.urlencoded({ extended: false, limit: config.requestBodyLimit }));
   app.use(requestIdMiddleware);
   app.use(requestLoggerMiddleware);
+  app.use(helmet());
+  app.use(compression());
   app.use(corsMiddleware);
+  app.use(express.json({ limit: config.requestBodyLimit }));
+  app.use(express.urlencoded({ extended: false, limit: config.requestBodyLimit }));
 
   app.use("/api", healthRouter);
 

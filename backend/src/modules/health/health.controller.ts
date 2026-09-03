@@ -1,9 +1,6 @@
 import type { Request, Response } from "express";
-import {
-  createErrorResponse,
-  createSuccessResponse
-} from "../../shared/utilities/api-response";
-import { formatRequestId } from "../../shared/utilities/request-id";
+import { serviceUnavailable } from "../../shared/errors/api-error";
+import { createSuccessResponse } from "../../shared/utilities/api-response";
 import { getHealthStatus, getReadinessStatus } from "./health.service";
 
 export function getHealth(
@@ -14,21 +11,13 @@ export function getHealth(
 }
 
 export async function getReadiness(
-  request: Request,
+  _request: Request,
   response: Response
 ): Promise<Response> {
   const readiness = await getReadinessStatus();
 
   if (!readiness) {
-    const requestId = formatRequestId(request.id);
-
-    return response.status(503).json(
-      createErrorResponse({
-        code: "SERVICE_UNAVAILABLE",
-        message: "Database connection is unavailable.",
-        ...(requestId ? { requestId } : {})
-      })
-    );
+    throw serviceUnavailable("Database connection is unavailable.");
   }
 
   return response.status(200).json(createSuccessResponse(readiness));

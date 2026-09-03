@@ -1,5 +1,5 @@
 import { logger } from "../../config/logger";
-import { ApiError } from "../../shared/errors/api-error";
+import { serviceUnavailable } from "../../shared/errors/api-error";
 import { getSafeDatabaseError } from "../../shared/utilities/database-error";
 import { prisma } from "./prisma.client";
 
@@ -14,11 +14,7 @@ class DatabaseService {
         "Database connection failed"
       );
 
-      throw new ApiError({
-        statusCode: 503,
-        code: "DATABASE_CONNECTION_FAILED",
-        message: "Database connection failed."
-      });
+      throw serviceUnavailable("Database connection failed.");
     }
   }
 

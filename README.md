@@ -284,6 +284,47 @@ GET http://localhost:5000/api/health/ready
 
 The frontend home page still calls `/api/health` through `frontend/src/services/api.ts`.
 
+## Backend API Contract
+
+Successful API responses use:
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+Error responses use:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed.",
+    "details": [{ "field": "email", "message": "A valid email is required." }],
+    "requestId": "correlation-id"
+  }
+}
+```
+
+`details` is optional and is reserved for safe validation field names and messages. Future frontend code should branch on `error.code`, display `error.message`, and attach `error.details` to field-level UI when present.
+
+Stable error codes map to HTTP statuses as follows: `INVALID_REQUEST` 400, `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `CONFLICT` 409, `VALIDATION_ERROR` 422, `SERVICE_UNAVAILABLE` 503, and `INTERNAL_SERVER_ERROR` 500.
+
+Every error response includes the existing request ID from the `x-request-id` correlation header. Expected application errors use the shared `ApiError` helpers and are logged at a lower severity with method, path, status, code, and request ID. Unexpected errors are logged internally with the stack trace, but stack traces, Prisma details, SQL, credentials, authorization headers, cookies, passwords, password hashes, and tokens are never returned to API clients.
+
+Future async controllers should use the existing `asyncRoute` wrapper so rejected promises flow to the global error handler. Domain code should throw the shared errors, such as `validationError`, `notFound`, `conflict`, `unauthorized`, `forbidden`, or `serviceUnavailable`, instead of constructing ad hoc JSON responses.
+
+## Backend Request Validation
+
+Zod is installed in the backend workspace and reusable validation middleware lives in `backend/src/middleware/validate-request.ts`. It can validate `body`, `params`, and `query` values, writes parsed data back to the request, and forwards failures to the global error middleware as `422 VALIDATION_ERROR` responses with safe `{ field, message }` details only.
+
+Reusable schemas live in `backend/src/validation/request-schemas.ts`. Current schemas cover login bodies, product ID route params, product variant ID route params, add-to-cart bodies, cart quantity updates, and cart variant changes. Login validation trims and lowercases email while leaving the password unchanged. Cart validation accepts only product IDs, product variant IDs, and quantities; it does not accept client-supplied price, subtotal, total, stock, or user ID fields.
+
+Validation checks request structure only. Product existence, variant ownership, stock availability, prices, and user ownership must be checked later in service code, not inside Zod schemas.
+
 ## Quality Commands
 
 ```bash

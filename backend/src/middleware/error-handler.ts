@@ -1,18 +1,65 @@
 import type { ErrorRequestHandler } from "express";
-import { config } from "../config/env";
-import { ApiError } from "../shared/errors/api-error";
+import { Prisma } from "../generated/prisma/client";
+import {
+  API_ERROR_CODES,
+  ApiError,
+  badRequest,
+  conflict,
+  notFound
+} from "../shared/errors/api-error";
 import { createErrorResponse } from "../shared/utilities/api-response";
 import { formatRequestId } from "../shared/utilities/request-id";
 
+type HttpParserError = Error & {
+  status?: number;
+  statusCode?: number;
+  type?: string;
+};
+
+function isHttpParserError(error: unknown): error is HttpParserError {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const candidate = error as HttpParserError;
+
+  return (
+    candidate.type === "entity.parse.failed" ||
+    candidate.type === "entity.too.large" ||
+    candidate.status === 400 ||
+    candidate.statusCode === 400 ||
+    candidate.status === 413 ||
+    candidate.statusCode === 413
+  );
+}
+
 function normalizeError(error: unknown): ApiError {
-  if (error instanceof ApiError) {
+  if (error instanceof ApiError && error.isOperational) {
     return error;
   }
 
+  if (isHttpParserError(error)) {
+    if (error.type === "entity.too.large") {
+      return badRequest("Request body is too large.");
+    }
+
+    return badRequest("Request body contains invalid JSON.");
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") {
+      return conflict("The request conflicts with existing data.");
+    }
+
+    if (error.code === "P2025") {
+      return notFound("Resource not found.");
+    }
+  }
+
   return new ApiError({
-    statusCode: 500,
-    code: "INTERNAL_SERVER_ERROR",
-    message: "An unexpected error occurred."
+    code: API_ERROR_CODES.INTERNAL_SERVER_ERROR,
+    message: "An unexpected server error occurred.",
+    isOperational: false
   });
 }
 
@@ -20,17 +67,36 @@ export const errorHandlerMiddleware: ErrorRequestHandler = (
   error,
   request,
   response,
-  _next
+  next
 ) => {
+  if (response.headersSent) {
+    next(error);
+    return;
+  }
+
   const normalizedError = normalizeError(error);
   const statusCode = normalizedError.statusCode;
-  const isServerError = statusCode >= 500;
+  const isUnexpectedServerError = !normalizedError.isOperational;
   const requestId = formatRequestId(request.id) ?? "unknown";
+  const logContext = {
+    requestId,
+    method: request.method,
+    path: request.originalUrl,
+    statusCode,
+    code: normalizedError.code
+  };
 
-  if (isServerError) {
-    request.log.error({ err: error, requestId }, "Request failed");
+  if (isUnexpectedServerError) {
+    request.log.error(
+      {
+        ...logContext,
+        errorName: error instanceof Error ? error.name : typeof error,
+        err: error
+      },
+      "Unexpected request failure"
+    );
   } else {
-    request.log.warn({ err: error, requestId }, "Request rejected");
+    request.log.warn(logContext, "Request rejected");
   }
 
   response.status(statusCode).json(
@@ -38,12 +104,7 @@ export const errorHandlerMiddleware: ErrorRequestHandler = (
       code: normalizedError.code,
       message: normalizedError.message,
       requestId,
-      details:
-        config.isProduction || !isServerError
-          ? normalizedError.details
-          : {
-              stack: error instanceof Error ? error.stack : undefined
-            }
+      ...(normalizedError.details ? { details: normalizedError.details } : {})
     })
   );
 };

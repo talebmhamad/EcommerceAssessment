@@ -1,14 +1,20 @@
+import type {
+  ApiErrorCode,
+  ValidationIssue
+} from "../errors/api-error";
+
 export type ApiSuccessResponse<TData> = {
   success: true;
   data: TData;
+  meta?: Record<string, unknown>;
 };
 
 export type ApiErrorResponse = {
   success: false;
   error: {
-    code: string;
+    code: ApiErrorCode;
     message: string;
-    requestId?: string;
-    details?: unknown;
+    details?: ValidationIssue[];
+    requestId: string;
   };
 };

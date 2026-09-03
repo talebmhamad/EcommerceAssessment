@@ -23,6 +23,12 @@ function validateDatabaseUrl(value: string, context: z.RefinementCtx): void {
   }
 }
 
+const jwtExpiresInSchema = z
+  .string()
+  .trim()
+  .regex(/^[1-9]\d*[smhd]$/, "JWT_EXPIRES_IN must be a duration such as 15m, 1h, or 7d.")
+  .default("1h");
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -30,7 +36,9 @@ const envSchema = z.object({
   BACKEND_PORT: z.coerce.number().int().min(1).max(65535).default(5000),
   FRONTEND_URL: z.string().url().default("http://localhost:3000"),
   CORS_ALLOWED_ORIGINS: z.string().optional(),
-  DATABASE_URL: z.string().min(1).superRefine(validateDatabaseUrl)
+  DATABASE_URL: z.string().min(1).superRefine(validateDatabaseUrl),
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters."),
+  JWT_EXPIRES_IN: jwtExpiresInSchema
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -60,6 +68,10 @@ export const config = {
   port: parsedEnv.data.BACKEND_PORT,
   frontendUrl: new URL(parsedEnv.data.FRONTEND_URL).origin,
   databaseUrl: parsedEnv.data.DATABASE_URL,
+  jwt: {
+    secret: parsedEnv.data.JWT_SECRET,
+    expiresIn: parsedEnv.data.JWT_EXPIRES_IN
+  },
   cors: {
     allowedOrigins: parseAllowedOrigins(rawAllowedOrigins)
   },

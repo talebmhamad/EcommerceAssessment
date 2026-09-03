@@ -83,10 +83,12 @@ BACKEND_PORT=5000
 FRONTEND_URL=http://localhost:3000
 CORS_ALLOWED_ORIGINS=http://localhost:3000
 DATABASE_URL="postgresql://postgres:your_url_encoded_password@localhost:5432/ecommerce_assessment?schema=public&sslmode=disable"
+JWT_SECRET=replace_with_a_long_random_secret_at_least_32_chars
+JWT_EXPIRES_IN=1h
 NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
 ```
 
-The backend validates `DATABASE_URL` at startup and requires a PostgreSQL URL. Do not commit a real `.env` file or real credentials.
+The backend validates `DATABASE_URL` at startup and requires a PostgreSQL URL. `JWT_SECRET` is also required and must be at least 32 characters. Do not commit a real `.env` file, real credentials, or real JWT secrets.
 
 ## PostgreSQL Setup
 
@@ -316,6 +318,36 @@ Stable error codes map to HTTP statuses as follows: `INVALID_REQUEST` 400, `UNAU
 Every error response includes the existing request ID from the `x-request-id` correlation header. Expected application errors use the shared `ApiError` helpers and are logged at a lower severity with method, path, status, code, and request ID. Unexpected errors are logged internally with the stack trace, but stack traces, Prisma details, SQL, credentials, authorization headers, cookies, passwords, password hashes, and tokens are never returned to API clients.
 
 Future async controllers should use the existing `asyncRoute` wrapper so rejected promises flow to the global error handler. Domain code should throw the shared errors, such as `validationError`, `notFound`, `conflict`, `unauthorized`, `forbidden`, or `serviceUnavailable`, instead of constructing ad hoc JSON responses.
+
+## Authentication API
+
+The backend provides JWT authentication for the seeded demo user.
+
+Login:
+
+```text
+POST /api/auth/login
+```
+
+Request body:
+
+```json
+{
+  "email": "demo@ecommerce.local",
+  "password": "DemoUser@2026"
+}
+```
+
+The login route uses the shared Zod login schema, trims and lowercases email, compares the submitted password with the stored bcrypt hash, and returns the same `401 UNAUTHORIZED` response for an unknown email or incorrect password. Successful login returns a signed HS256 access token, `tokenType: Bearer`, expiration, and safe user fields only.
+
+Current user:
+
+```text
+GET /api/auth/me
+Authorization: Bearer <token>
+```
+
+The authentication middleware validates token signature, expiration, and the `sub` user ID claim, then attaches the authenticated user ID to the request for future user-specific routes. `/api/auth/me` loads the user from PostgreSQL and returns only `id`, `email`, and `createdAt`. Password hashes are never returned.
 
 ## Backend Request Validation
 

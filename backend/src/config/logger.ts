@@ -15,6 +15,8 @@ export const logger = pino({
       "token",
       "accessToken",
       "refreshToken",
+      "jwtSecret",
+      "JWT_SECRET",
       "databaseUrl",
       "DATABASE_URL"
     ],

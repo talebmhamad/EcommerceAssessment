@@ -7,6 +7,7 @@ import { errorHandlerMiddleware } from "./middleware/error-handler";
 import { notFoundMiddleware } from "./middleware/not-found";
 import { requestIdMiddleware } from "./middleware/request-id";
 import { requestLoggerMiddleware } from "./middleware/request-logger";
+import { authRouter } from "./modules/auth/auth.routes";
 import { healthRouter } from "./modules/health/health.routes";
 
 export function createApp(): express.Express {
@@ -22,6 +23,7 @@ export function createApp(): express.Express {
   app.use(express.json({ limit: config.requestBodyLimit }));
   app.use(express.urlencoded({ extended: false, limit: config.requestBodyLimit }));
 
+  app.use("/api/auth", authRouter);
   app.use("/api", healthRouter);
 
   app.use(notFoundMiddleware);

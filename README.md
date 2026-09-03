@@ -191,18 +191,30 @@ Products are stored in the `products` table. Each product has an integer `id`, r
 
 Prices use PostgreSQL `DECIMAL(12,2)` through Prisma `Decimal` so money is stored exactly instead of as floating-point values. The backend reads authoritative prices from PostgreSQL. The frontend must not provide authoritative prices, and future cart and checkout totals will be calculated by the backend. API serialization for Prisma Decimal values will be handled when product APIs are added.
 
-Stock is stored only in `product_variants.stock_quantity`; `products` intentionally has no stock column. This gives every sellable item one inventory source of truth and avoids reconciling competing `Product.stock` and `ProductVariant.stock` values.
+Stock is stored only in `product_variants.stock_quantity`; `products` intentionally has no stock column. This gives every sellable item one inventory source of truth and avoids reconciling competing `Product.stock` and `ProductVariant.stock` values. Each variant has independent inventory, so future stock validation can check the exact selected sellable record.
 
-Simple products use one internal default variant, typically with `label` set to `Default`, `is_default` set to true, and `stock_quantity` set to the available quantity. That default variant is not meant to appear as a required storefront choice. Configurable products use multiple selectable variants, such as future size or color combinations. Size and color option tables or values are intentionally deferred to a later task.
+Product variants support one customer-selectable option dimension for this assessment. `option_type` is either `SIZE` or `COLOR`, while `option_value` remains a string so future products are not limited to a hard-coded enum of values. A shirt can use values such as `Small`, `Medium`, and `Large`; headphones can use values such as `Black`, `White`, and `Blue`. This avoids JSON blobs, comma-separated values, and a heavier option engine that the assessment does not require.
 
-`product_variants` belongs to `products` through `product_id`. Variants cannot exist without a product, and deleting a product cascades to its variants. Each variant has a globally unique `sku`, a per-product unique `(product_id, label)` pair, and database defaults for stock and timestamps.
+Simple products use exactly one internal default variant, typically with `label` set to `Default`, `is_default` set to true, and both `option_type` and `option_value` set to null. That default variant is not meant to appear as a required storefront choice. Configurable products use selectable variants where `is_default` is false and both `option_type` and `option_value` are required. All variants for a configurable product should normally use the same option type; that cross-row rule is deferred to Task 6 seed validation, the future product service, and automated tests instead of database triggers.
 
-PostgreSQL blocks invalid catalog data at the database level: product prices cannot be negative, variant stock quantities cannot be negative, required fields are `NOT NULL`, SKUs are unique, and variants must reference an existing product.
+`product_variants` belongs to `products` through `product_id`. Variants cannot exist without a product, and deleting a product cascades to its variants. Each variant has a globally unique `sku`, a per-product unique `(product_id, option_type, option_value)` combination, a partial unique index that allows only one default variant per product, and database defaults for stock and timestamps.
+
+PostgreSQL blocks invalid catalog data at the database level: product prices cannot be negative, variant stock quantities cannot be negative, required fields are `NOT NULL`, SKUs are unique, variants must reference an existing product, default variants cannot carry option values, and selectable variants must carry both an option type and value.
+
+Future cart items must reference `ProductVariant` by ID with `productVariantId Int` and a foreign-key relation. The cart should not identify selected stock by label, size text, color text, unvalidated SKU, or product ID alone. When the same product has different variants, each selected variant can become a separate cart line.
+
+The final product catalog seed is deferred to Task 6, where exactly 15 products will be added, including at least three products with multiple variants. No permanent product records are seeded by the variant model task.
 
 Create and apply the product catalog migration with:
 
 ```bash
 npm run db:migrate -- --name add_product_catalog_foundation
+```
+
+Complete the variant model with:
+
+```bash
+npm run db:migrate -- --name complete_product_variant_model
 ```
 
 ## Running The Applications

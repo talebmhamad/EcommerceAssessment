@@ -14,6 +14,11 @@ enum ProductType {
   CONFIGURABLE
 }
 
+enum VariantOptionType {
+  SIZE
+  COLOR
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique @db.VarChar(320)
@@ -37,18 +42,20 @@ model Product {
 }
 
 model ProductVariant {
-  id            Int      @id @default(autoincrement())
-  productId     Int      @map("product_id")
-  sku           String   @unique @db.VarChar(64)
-  label         String   @db.VarChar(120)
-  stockQuantity Int      @default(0) @map("stock_quantity")
-  isDefault     Boolean  @default(false) @map("is_default")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id            Int                @id @default(autoincrement())
+  productId     Int                @map("product_id")
+  sku           String             @unique @db.VarChar(64)
+  label         String             @db.VarChar(120)
+  optionType    VariantOptionType? @map("option_type")
+  optionValue   String?            @map("option_value") @db.VarChar(60)
+  stockQuantity Int                @default(0) @map("stock_quantity")
+  isDefault     Boolean            @default(false) @map("is_default")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@unique([productId, label])
+  @@unique([productId, optionType, optionValue])
   @@index([productId])
   @@map("product_variants")
 }

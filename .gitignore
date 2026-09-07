@@ -1,5 +1,7 @@
 node_modules/
 .next/
+.turbo/
+.vercel/
 dist/
 coverage/
 *.tsbuildinfo
@@ -11,10 +13,16 @@ frontend/CLAUDE.md
 .env.*
 !.env.example
 
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+.vscode/
+.idea/
+*.swp
+*.swo
 
 .DS_Store
 Thumbs.db

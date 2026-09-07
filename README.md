@@ -1,67 +1,23 @@
 # Ecommerce Assessment
 
-Phase 1 foundation for a mini e-commerce platform. This repository is a TypeScript npm monorepo with an independently runnable Next.js frontend and Express backend.
-
-Authentication, product APIs, cart APIs, wishlist APIs, checkout, and order workflows are intentionally deferred to later tasks.
+A TypeScript npm monorepo for a mini e-commerce assessment. The repository is split into an independently runnable Next.js frontend and Express backend, with PostgreSQL as the source of truth for users, products, cart, wishlist, and orders.
 
 ## Architecture
 
-The project uses a modular monolith structure. That keeps the current assessment simple to operate while giving future ERP-style modules clear boundaries.
+- `frontend`: Next.js App Router application. It owns pages, shared UI, TanStack Query state, protected-route behavior, and a typed API service layer.
+- `backend`: Express API. It owns authentication, validation, business rules, Prisma database access, centralized logging, and safe error responses.
+- `backend/src/modules`: feature modules for auth, products, cart, wishlist, checkout, orders, and health.
+- `backend/prisma`: Prisma schema, committed migrations, deterministic seed data, and Prisma 7 config.
 
-- `frontend`: Next.js App Router application with centralized public config and a small API service layer.
-- `backend`: Express application with separated app creation and server startup, centralized configuration, request middleware, and isolated modules.
-- `backend/src/modules`: feature modules own routes, controllers, services, and types.
-- `backend/src/infrastructure`: technical integrations such as the Prisma database layer.
-- `backend/prisma`: Prisma schema, migration directory, and seed entry point.
-
-## Folder Structure
-
-```text
-.
-|-- frontend/
-|   `-- src/
-|       |-- app/
-|       |-- components/
-|       |-- config/
-|       |-- features/
-|       |-- hooks/
-|       |-- lib/
-|       |-- services/
-|       `-- types/
-|-- backend/
-|   |-- prisma/
-|   |   |-- migrations/
-|   |   |-- seed-data/
-|   |   |-- schema.prisma
-|   |   `-- seed.ts
-|   |-- prisma7.config.ts
-|   `-- src/
-|       |-- app.ts
-|       |-- server.ts
-|       |-- config/
-|       |-- infrastructure/
-|       |   `-- database/
-|       |-- middleware/
-|       |-- modules/
-|       |   `-- health/
-|       |-- shared/
-|       `-- validation/
-|-- .env.example
-|-- .gitignore
-|-- package-lock.json
-|-- package.json
-`-- README.md
-```
+The frontend does not calculate authoritative prices, totals, stock, or user ownership. It sends only user choices such as selected IDs and quantities. The backend derives the authenticated user from the verified JWT, reads current database state, validates stock and ownership, and calculates all prices/totals.
 
 ## Prerequisites
 
 - Node.js 20.19+, 22.12+, or 24+
 - npm 11+
-- PostgreSQL installed locally or available through a managed PostgreSQL database
+- PostgreSQL available locally or through a managed database
 
-Prisma ORM 7.10.0 is used. Prisma supports PostgreSQL 9.6 through 18 according to the Prisma supported databases documentation, but a currently maintained PostgreSQL version such as 16+ is recommended for local assessment work.
-
-## Installation
+## Install Dependencies
 
 ```bash
 npm install
@@ -69,13 +25,19 @@ npm install
 
 ## Environment Setup
 
-Create a local `.env` file at the repository root. It is ignored by Git.
+Create a local root `.env` file from the tracked example:
 
 ```bash
 cp .env.example .env
 ```
 
-Local values:
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Update `.env` with local-only values:
 
 ```env
 NODE_ENV=development
@@ -88,28 +50,11 @@ JWT_EXPIRES_IN=1h
 NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
 ```
 
-The backend validates `DATABASE_URL` at startup and requires a PostgreSQL URL. `JWT_SECRET` is also required and must be at least 32 characters. Do not commit a real `.env` file, real credentials, or real JWT secrets.
+`.env` and other real environment files are ignored by Git. Keep `.env.example` fake and safe to commit.
 
-## PostgreSQL Setup
+## Database Setup
 
-Recommended local database:
-
-```text
-Database: ecommerce_assessment
-Schema: public
-```
-
-Create the database with `psql`:
-
-```sql
-CREATE DATABASE ecommerce_assessment;
-```
-
-Or create the same database in pgAdmin. For local assessment development, an existing local PostgreSQL account may be used. Do not use the PostgreSQL superuser as a production recommendation.
-
-## Prisma Workflow
-
-Prisma 7 keeps datasource URL configuration in `backend/prisma7.config.ts` and the PostgreSQL provider in `backend/prisma/schema.prisma`.
+Create a PostgreSQL database named `ecommerce_assessment` or update `DATABASE_URL` to point at your chosen local database.
 
 Generate Prisma Client:
 
@@ -117,178 +62,78 @@ Generate Prisma Client:
 npm run db:generate
 ```
 
-Validate the schema:
+Validate Prisma schema:
 
 ```bash
 npm run db:validate
 ```
 
-Format the schema:
-
-```bash
-npm run db:format
-```
-
-Create and apply a development migration after real models are added:
-
-```bash
-npm run db:migrate -- --name add_users
-```
-
-Apply committed migrations in production:
+Apply committed migrations:
 
 ```bash
 npm run db:migrate:deploy
 ```
 
-Run seed support:
+For local development where you also want Prisma to check migration drift:
+
+```bash
+npm run db:migrate
+```
+
+Seed the demo user and deterministic catalog:
 
 ```bash
 npm run db:seed
 ```
 
-Open Prisma Studio:
+The seed is idempotent. It upserts one demo user and exactly 15 managed products with 25 variants, including 5 multi-variant products.
 
-```bash
-npm run db:studio
-```
-
-The first migration, `add_user`, creates the `users` table for authentication data. The `add_product_catalog_foundation` migration adds the product catalog tables. Future migrations should add cart, wishlist, and order tables when those tasks are implemented. Migrations should be committed to Git because they document and reproduce database changes across environments. `prisma db push` is not the primary workflow because it bypasses versioned migration history.
-
-## User Data
-
-The first database entity is `User`, stored in the `users` table. It supports future login by storing only the fields required for credential lookup:
-
-- `id`: integer auto-incrementing primary key.
-- `email`: required normalized email address with a database-level unique constraint.
-- `password_hash`: required bcrypt password hash.
-- `created_at`: required timestamp with timezone and a database default.
-
-Email is unique because future login will identify users by email. Demo seed emails are normalized with `email.trim().toLowerCase()` before saving. Passwords are stored as bcrypt hashes so plaintext credentials are never saved in PostgreSQL. The current bcrypt work factor is 12 rounds.
-
-Local assessment demo credentials:
+Demo credentials:
 
 ```text
 Email: demo@ecommerce.local
 Password: DemoUser@2026
 ```
 
-Apply migrations and run the seed:
+## Run The Apps
 
-```bash
-npm run db:migrate -- --name add_user
-npm run db:seed
-```
-
-Inspect local data with Prisma Studio:
-
-```bash
-npm run db:studio
-```
-
-Registration is intentionally not included. The login endpoint and JWT authentication will be implemented later.
-
-## Product Catalog Data
-
-Products are stored in the `products` table. Each product has an integer `id`, unique lowercase `slug`, required `title`, required full `description`, required `price`, `type`, `created_at`, and `updated_at`. `type` is `SIMPLE` by default and may also be `CONFIGURABLE`. The slug is used as a stable seed identity; titles are not unique.
-
-Prices use PostgreSQL `DECIMAL(12,2)` through Prisma `Decimal` so money is stored exactly instead of as floating-point values. The backend reads authoritative prices from PostgreSQL. The frontend must not provide authoritative prices, and future cart and checkout totals will be calculated by the backend. API serialization for Prisma Decimal values will be handled when product APIs are added.
-
-Stock is stored only in `product_variants.stock_quantity`; `products` intentionally has no stock column. This gives every sellable item one inventory source of truth and avoids reconciling competing `Product.stock` and `ProductVariant.stock` values. Each variant has independent inventory, so future stock validation can check the exact selected sellable record.
-
-Product variants support one customer-selectable option dimension for this assessment. `option_type` is either `SIZE` or `COLOR`, while `option_value` remains a string so future products are not limited to a hard-coded enum of values. A shirt can use values such as `Small`, `Medium`, and `Large`; headphones can use values such as `Black`, `White`, and `Blue`. This avoids JSON blobs, comma-separated values, and a heavier option engine that the assessment does not require.
-
-Simple products use exactly one internal default variant, typically with `label` set to `Default`, `is_default` set to true, and both `option_type` and `option_value` set to null. That default variant is not meant to appear as a required storefront choice. Configurable products use selectable variants where `is_default` is false and both `option_type` and `option_value` are required. All variants for a configurable product should normally use the same option type; that cross-row rule is handled by seed validation for the initial catalog and should also be enforced later by the product service and automated tests instead of database triggers.
-
-`product_variants` belongs to `products` through `product_id`. Variants cannot exist without a product, and deleting a product cascades to its variants. Each variant has a globally unique `sku`, a per-product unique `(product_id, option_type, option_value)` combination, a partial unique index that allows only one default variant per product, and database defaults for stock and timestamps.
-
-PostgreSQL blocks invalid catalog data at the database level: product prices cannot be negative, variant stock quantities cannot be negative, required fields are `NOT NULL`, SKUs are unique, variants must reference an existing product, default variants cannot carry option values, and selectable variants must carry both an option type and value.
-
-Future cart items must reference `ProductVariant` by ID with `productVariantId Int` and a foreign-key relation. The cart should not identify selected stock by label, size text, color text, unvalidated SKU, or product ID alone. When the same product has different variants, each selected variant can become a separate cart line.
-
-The initial product catalog seed is provided in Task 6 with exactly 15 products, including five products with multiple variants.
-
-Create and apply the product catalog migration with:
-
-```bash
-npm run db:migrate -- --name add_product_catalog_foundation
-```
-
-Complete the variant model with:
-
-```bash
-npm run db:migrate -- --name complete_product_variant_model
-```
-
-Add stable product seed identity with:
-
-```bash
-npm run db:migrate -- --name add_product_slug
-```
-
-## Seeded Catalog
-
-Run the deterministic local seed with:
-
-```bash
-npm run db:seed
-```
-
-The seed keeps the demo user credentials:
-
-```text
-Email: demo@ecommerce.local
-Password: DemoUser@2026
-```
-
-It also creates the assessment catalog with exactly 15 products and 25 variants: 10 simple products with one internal default variant each, plus 5 configurable products with three variants each. Three configurable products use `SIZE` values and two use `COLOR` values.
-
-Internal default variants use `label = Default`, `is_default = true`, and null option fields, so simple products do not expose size or color choices. Configurable variants use independent stock values on `ProductVariant`, including high-stock, low-stock, and out-of-stock examples. Notable cases are Premium Notebook Set with stock 100, Everyday Hoodie Large with stock 1, Adjustable Phone Stand with stock 2, Classic Cotton T-Shirt Large with stock 0, and Wireless Headphones Blue with stock 0.
-
-Seed definitions live in `backend/prisma/seed-data/products.ts`. The seed validates counts, slug format and uniqueness, SKU uniqueness, price and stock nonnegativity, simple default variants, configurable option values, and duplicate option values before writing. Database writes run in a Prisma transaction and upsert products by stable slug and variants by globally unique SKU, so running the seed repeatedly updates the managed catalog without creating duplicates.
-
-Inspect local seeded data with:
-
-```bash
-npm run db:studio
-```
-
-## Running The Applications
-
-Run both applications:
+Run frontend and backend together:
 
 ```bash
 npm run dev
 ```
 
-Run each application independently:
+Run separately:
 
 ```bash
 npm run dev:frontend
 npm run dev:backend
 ```
 
-## Health Checks
-
-Liveness endpoint:
+Default local URLs:
 
 ```text
-GET http://localhost:5000/api/health
+Frontend: http://localhost:3000
+Backend:  http://localhost:5000/api
 ```
 
-Readiness endpoint:
+If port `3000` is already in use, Next.js may offer another frontend port. Update `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS` if you want the backend to accept that alternate origin.
 
-```text
-GET http://localhost:5000/api/health/ready
-```
+## Application Features
 
-`/api/health` confirms the backend process is running. `/api/health/ready` runs a lightweight `SELECT 1` through Prisma and returns `200` when PostgreSQL is reachable or `503` when the database is unavailable.
+- JWT login for the seeded demo user.
+- Protected product listing and product detail pages.
+- Product variants with stock-aware selection.
+- PostgreSQL-backed cart with add, update quantity, change variant, remove, subtotals, and total.
+- PostgreSQL-backed wishlist with add/list/remove and duplicate prevention.
+- Checkout validation and transactional checkout.
+- Order creation with order-item snapshots.
+- Order confirmation page backed by secure user-owned order lookup.
+- Shared navigation, loading states, error states, empty states, and responsive UI.
 
-The frontend home page still calls `/api/health` through `frontend/src/services/api.ts`.
+## API Shape
 
-## Backend API Contract
-
-Successful API responses use:
+Successful responses:
 
 ```json
 {
@@ -297,7 +142,7 @@ Successful API responses use:
 }
 ```
 
-Error responses use:
+Error responses:
 
 ```json
 {
@@ -311,67 +156,59 @@ Error responses use:
 }
 ```
 
-`details` is optional and is reserved for safe validation field names and messages. Future frontend code should branch on `error.code`, display `error.message`, and attach `error.details` to field-level UI when present.
-
-Stable error codes map to HTTP statuses as follows: `INVALID_REQUEST` 400, `UNAUTHORIZED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `CONFLICT` 409, `VALIDATION_ERROR` 422, `SERVICE_UNAVAILABLE` 503, and `INTERNAL_SERVER_ERROR` 500.
-
-Every error response includes the existing request ID from the `x-request-id` correlation header. Expected application errors use the shared `ApiError` helpers and are logged at a lower severity with method, path, status, code, and request ID. Unexpected errors are logged internally with the stack trace, but stack traces, Prisma details, SQL, credentials, authorization headers, cookies, passwords, password hashes, and tokens are never returned to API clients.
-
-Future async controllers should use the existing `asyncRoute` wrapper so rejected promises flow to the global error handler. Domain code should throw the shared errors, such as `validationError`, `notFound`, `conflict`, `unauthorized`, `forbidden`, or `serviceUnavailable`, instead of constructing ad hoc JSON responses.
-
-## Authentication API
-
-The backend provides JWT authentication for the seeded demo user.
-
-Login:
-
-```text
-POST /api/auth/login
-```
-
-Request body:
-
-```json
-{
-  "email": "demo@ecommerce.local",
-  "password": "DemoUser@2026"
-}
-```
-
-The login route uses the shared Zod login schema, trims and lowercases email, compares the submitted password with the stored bcrypt hash, and returns the same `401 UNAUTHORIZED` response for an unknown email or incorrect password. Successful login returns a signed HS256 access token, `tokenType: Bearer`, expiration, and safe user fields only.
-
-Current user:
-
-```text
-GET /api/auth/me
-Authorization: Bearer <token>
-```
-
-The authentication middleware validates token signature, expiration, and the `sub` user ID claim, then attaches the authenticated user ID to the request for future user-specific routes. `/api/auth/me` loads the user from PostgreSQL and returns only `id`, `email`, and `createdAt`. Password hashes are never returned.
-
-## Backend Request Validation
-
-Zod is installed in the backend workspace and reusable validation middleware lives in `backend/src/middleware/validate-request.ts`. It can validate `body`, `params`, and `query` values, writes parsed data back to the request, and forwards failures to the global error middleware as `422 VALIDATION_ERROR` responses with safe `{ field, message }` details only.
-
-Reusable schemas live in `backend/src/validation/request-schemas.ts`. Current schemas cover login bodies, product ID route params, product variant ID route params, add-to-cart bodies, cart quantity updates, and cart variant changes. Login validation trims and lowercases email while leaving the password unchanged. Cart validation accepts only product IDs, product variant IDs, and quantities; it does not accept client-supplied price, subtotal, total, stock, or user ID fields.
-
-Validation checks request structure only. Product existence, variant ownership, stock availability, prices, and user ownership must be checked later in service code, not inside Zod schemas.
+Errors are normalized by the global error middleware. Stack traces, Prisma internals, credentials, passwords, password hashes, tokens, and connection strings are not returned to clients.
 
 ## Quality Commands
+
+Run everything:
 
 ```bash
 npm run lint
 npm run typecheck
+npm run test
 npm run build
 ```
 
-Project-specific commands are also available:
+Run by workspace:
 
 ```bash
 npm run lint:frontend
 npm run lint:backend
 npm run typecheck:frontend
 npm run typecheck:backend
+npm run test:frontend
+npm run test:backend
 npm run build:frontend
 npm run build:backend
 ```
+
+Backend integration tests require a separate PostgreSQL test database. Set `TEST_DATABASE_URL` to a database whose name contains `test`; the test suite refuses to run against any other database name.
+
+```bash
+TEST_DATABASE_URL="postgresql://postgres:fake_password@localhost:5432/ecommerce_assessment_test?schema=public&sslmode=disable" npm run test:backend
+```
+
+On PowerShell:
+
+```powershell
+$env:TEST_DATABASE_URL="postgresql://postgres:fake_password@localhost:5432/ecommerce_assessment_test?schema=public&sslmode=disable"
+npm run test:backend
+Remove-Item Env:\TEST_DATABASE_URL
+```
+
+Frontend tests mock API requests and exercise user-visible behavior/state helpers without browser automation.
+
+## Fresh Clone Checklist
+
+From a clean clone:
+
+1. Run `npm install`.
+2. Create `.env` from `.env.example` and fill local database/JWT values.
+3. Create the PostgreSQL database named in `DATABASE_URL`.
+4. Run `npm run db:generate`.
+5. Run `npm run db:validate`.
+6. Run `npm run db:migrate:deploy`.
+7. Run `npm run db:seed`.
+8. Run `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`.
+
+No real secrets or local `.env` files are required in Git. The tracked lockfile, Prisma schema, migrations, migration lock file, and workspace package files are enough to reproduce install/build after local environment setup.

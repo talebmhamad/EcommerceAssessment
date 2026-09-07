@@ -1,60 +1,94 @@
 # Ecommerce Assessment
 
-A TypeScript npm monorepo for a mini e-commerce assessment. The repository is split into an independently runnable Next.js frontend and Express backend, with PostgreSQL as the source of truth for users, products, cart, wishlist, and orders.
+A TypeScript npm monorepo for a small e-commerce assessment. The app is split into a Next.js frontend and an Express backend. PostgreSQL is the source of truth for users, products, variants, cart items, wishlist items, orders, and order items.
 
-## Architecture
+## Technology Stack
 
-- `frontend`: Next.js App Router application. It owns pages, shared UI, TanStack Query state, protected-route behavior, and a typed API service layer.
-- `backend`: Express API. It owns authentication, validation, business rules, Prisma database access, centralized logging, and safe error responses.
-- `backend/src/modules`: feature modules for auth, products, cart, wishlist, checkout, orders, and health.
-- `backend/prisma`: Prisma schema, committed migrations, deterministic seed data, and Prisma 7 config.
+- Frontend: Next.js App Router, React, TypeScript, TanStack Query, Tailwind CSS, and a typed API service layer.
+- Backend: Node.js, Express, TypeScript, Zod validation, JWT authentication, bcrypt password hashing, Pino logging, and Prisma.
+- Database: PostgreSQL with committed Prisma migrations and deterministic seed data.
+- Package management: npm workspaces from the repository root.
 
-The frontend does not calculate authoritative prices, totals, stock, or user ownership. It sends only user choices such as selected IDs and quantities. The backend derives the authenticated user from the verified JWT, reads current database state, validates stock and ownership, and calculates all prices/totals.
+## Repository Structure
+
+- `frontend`: Next.js application, protected pages, shared UI, auth provider, query keys, and frontend API client.
+- `backend`: Express API, feature modules, validation, business services, Prisma database access, and centralized error handling.
+- `backend/src/modules`: auth, products, cart, wishlist, checkout, orders, and health modules.
+- `backend/prisma`: Prisma schema, Prisma 7 config, migrations, seed script, and seed catalog data.
+- `docs`: supporting project documentation, including [database architecture](docs/database-architecture.md).
+
+The frontend sends user choices such as selected IDs and quantities. The backend derives the user from the verified JWT, enforces ownership and stock rules, reads current database prices, and calculates all totals.
 
 ## Prerequisites
 
-- Node.js 20.19+, 22.12+, or 24+
-- npm 11+
-- PostgreSQL available locally or through a managed database
+- Node.js 20.19+, 22.12+, or 24+.
+- npm 11.x. The root `package.json` declares `npm@11.9.0`.
+- PostgreSQL 14+ available locally or through a managed database.
 
 ## Install Dependencies
+
+From the repository root, install all workspace dependencies:
 
 ```bash
 npm install
 ```
 
+The root install covers both workspaces. To install only one workspace after changing dependencies, use:
+
+```bash
+npm install --workspace frontend
+npm install --workspace backend
+```
+
 ## Environment Setup
 
-Create a local root `.env` file from the tracked example:
+Create the backend and Prisma environment file from the tracked example:
 
 ```bash
 cp .env.example .env
 ```
 
-On Windows PowerShell:
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Update `.env` with local-only values:
+The backend and Prisma commands read the root `.env`. Next.js reads frontend-local environment files or inherited shell variables. If the frontend API URL differs from the default, create `frontend/.env.local` with only the public frontend value:
 
 ```env
-NODE_ENV=development
-BACKEND_PORT=5000
-FRONTEND_URL=http://localhost:3000
-CORS_ALLOWED_ORIGINS=http://localhost:3000
-DATABASE_URL="postgresql://postgres:your_url_encoded_password@localhost:5432/ecommerce_assessment?schema=public&sslmode=disable"
-JWT_SECRET=replace_with_a_long_random_secret_at_least_32_chars
-JWT_EXPIRES_IN=1h
 NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
 ```
 
-`.env` and other real environment files are ignored by Git. Keep `.env.example` fake and safe to commit.
+Keep `.env`, `frontend/.env.local`, and other real environment files local. They are ignored by Git.
+
+### Environment Variables
+
+Backend and Prisma variables:
+
+- `NODE_ENV`: `development`, `test`, or `production`. Defaults to development behavior when not overridden.
+- `BACKEND_PORT`: port used by the Express server. The default is `5000`.
+- `FRONTEND_URL`: primary frontend origin used for CORS defaults, such as `http://localhost:3000`.
+- `CORS_ALLOWED_ORIGINS`: optional comma-separated list of allowed frontend origins. Use this when Next.js runs on an alternate port.
+- `DATABASE_URL`: PostgreSQL connection URL for Prisma and the backend. Use a local database URL, not a committed secret.
+- `JWT_SECRET`: private signing secret for JWTs. Use a long random value of at least 32 characters.
+- `JWT_EXPIRES_IN`: JWT lifetime such as `15m`, `1h`, or `7d`.
+
+Frontend variable:
+
+- `NEXT_PUBLIC_API_BASE_URL`: browser-visible API base URL. The app defaults to `http://localhost:5000/api` if it is not set.
+
+The tracked `.env.example` uses fake local assessment values only.
 
 ## Database Setup
 
-Create a PostgreSQL database named `ecommerce_assessment` or update `DATABASE_URL` to point at your chosen local database.
+Create a PostgreSQL database named `ecommerce_assessment`. From `psql`, one simple local setup is:
+
+```sql
+CREATE DATABASE ecommerce_assessment;
+```
+
+Then update `DATABASE_URL` in `.env` to point to that database.
 
 Generate Prisma Client:
 
@@ -62,22 +96,28 @@ Generate Prisma Client:
 npm run db:generate
 ```
 
-Validate Prisma schema:
+Validate the Prisma schema:
 
 ```bash
 npm run db:validate
 ```
 
-Apply committed migrations:
+Apply committed migrations in a fresh local database:
 
 ```bash
 npm run db:migrate:deploy
 ```
 
-For local development where you also want Prisma to check migration drift:
+For local development, Prisma can also create and apply a new migration:
 
 ```bash
-npm run db:migrate
+npm run db:migrate -- --name your_migration_name
+```
+
+Format the Prisma schema:
+
+```bash
+npm run db:format
 ```
 
 Seed the demo user and deterministic catalog:
@@ -86,9 +126,15 @@ Seed the demo user and deterministic catalog:
 npm run db:seed
 ```
 
-The seed is idempotent. It upserts one demo user and exactly 15 managed products with 25 variants, including 5 multi-variant products.
+Open Prisma Studio:
 
-Demo credentials:
+```bash
+npm run db:studio
+```
+
+The seed is idempotent. It upserts one public assessment demo user and exactly 15 managed products with 25 variants, including 5 multi-variant products.
+
+Demo login credentials defined in `backend/prisma/seed.ts`:
 
 ```text
 Email: demo@ecommerce.local
@@ -97,16 +143,21 @@ Password: DemoUser@2026
 
 ## Run The Apps
 
-Run frontend and backend together:
+Run frontend and backend together from the root:
 
 ```bash
 npm run dev
 ```
 
-Run separately:
+Run only the frontend:
 
 ```bash
 npm run dev:frontend
+```
+
+Run only the backend:
+
+```bash
 npm run dev:backend
 ```
 
@@ -114,24 +165,78 @@ Default local URLs:
 
 ```text
 Frontend: http://localhost:3000
-Backend:  http://localhost:5000/api
+Backend API: http://localhost:5000/api
 ```
 
-If port `3000` is already in use, Next.js may offer another frontend port. Update `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS` if you want the backend to accept that alternate origin.
+If port `3000` is already in use, Next.js may use another frontend port. Add that origin to `CORS_ALLOWED_ORIGINS` so the backend accepts browser requests from the alternate port.
+
+## Health Endpoints
+
+The backend exposes unauthenticated health checks:
+
+- `GET /api/health`: process health, service name, environment, and timestamp.
+- `GET /api/health/ready`: database readiness. Returns `200` when PostgreSQL is reachable and `503` when it is not.
+
+## Quality Commands
+
+Run both workspaces from the root:
+
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
+
+Run frontend only:
+
+```bash
+npm run lint:frontend
+npm run typecheck:frontend
+npm run test:frontend
+npm run build:frontend
+```
+
+Run backend only:
+
+```bash
+npm run lint:backend
+npm run typecheck:backend
+npm run test:backend
+npm run build:backend
+```
+
+Backend integration tests require a separate migrated PostgreSQL test database. The test runner refuses to run unless `TEST_DATABASE_URL` contains `test`.
+
+Bash:
+
+```bash
+TEST_DATABASE_URL="postgresql://postgres:fake_password@localhost:5432/ecommerce_assessment_test?schema=public&sslmode=disable" npm run test:backend
+```
+
+PowerShell:
+
+```powershell
+$env:TEST_DATABASE_URL="postgresql://postgres:fake_password@localhost:5432/ecommerce_assessment_test?schema=public&sslmode=disable"
+npm run test:backend
+Remove-Item Env:\TEST_DATABASE_URL
+```
+
+Frontend tests mock API requests and check user-visible behavior without browser automation.
 
 ## Application Features
 
 - JWT login for the seeded demo user.
 - Protected product listing and product detail pages.
 - Product variants with stock-aware selection.
-- PostgreSQL-backed cart with add, update quantity, change variant, remove, subtotals, and total.
-- PostgreSQL-backed wishlist with add/list/remove and duplicate prevention.
+- PostgreSQL-backed cart with add, quantity update, variant change, removal, subtotals, and total.
+- PostgreSQL-backed wishlist with add, list, remove, and duplicate prevention.
 - Checkout validation and transactional checkout.
-- Order creation with order-item snapshots.
-- Order confirmation page backed by secure user-owned order lookup.
+- Order creation with checkout-time order item snapshots.
+- Secure order confirmation page.
 - Shared navigation, loading states, error states, empty states, and responsive UI.
 
-## API Shape
+## API Response Shape
 
 Successful responses:
 
@@ -156,59 +261,18 @@ Error responses:
 }
 ```
 
-Errors are normalized by the global error middleware. Stack traces, Prisma internals, credentials, passwords, password hashes, tokens, and connection strings are not returned to clients.
-
-## Quality Commands
-
-Run everything:
-
-```bash
-npm run lint
-npm run typecheck
-npm run test
-npm run build
-```
-
-Run by workspace:
-
-```bash
-npm run lint:frontend
-npm run lint:backend
-npm run typecheck:frontend
-npm run typecheck:backend
-npm run test:frontend
-npm run test:backend
-npm run build:frontend
-npm run build:backend
-```
-
-Backend integration tests require a separate PostgreSQL test database. Set `TEST_DATABASE_URL` to a database whose name contains `test`; the test suite refuses to run against any other database name.
-
-```bash
-TEST_DATABASE_URL="postgresql://postgres:fake_password@localhost:5432/ecommerce_assessment_test?schema=public&sslmode=disable" npm run test:backend
-```
-
-On PowerShell:
-
-```powershell
-$env:TEST_DATABASE_URL="postgresql://postgres:fake_password@localhost:5432/ecommerce_assessment_test?schema=public&sslmode=disable"
-npm run test:backend
-Remove-Item Env:\TEST_DATABASE_URL
-```
-
-Frontend tests mock API requests and exercise user-visible behavior/state helpers without browser automation.
+Errors are normalized by the global error middleware. Stack traces, Prisma internals, credentials, password hashes, tokens, and connection strings are not returned to clients.
 
 ## Fresh Clone Checklist
 
-From a clean clone:
-
 1. Run `npm install`.
-2. Create `.env` from `.env.example` and fill local database/JWT values.
-3. Create the PostgreSQL database named in `DATABASE_URL`.
-4. Run `npm run db:generate`.
-5. Run `npm run db:validate`.
-6. Run `npm run db:migrate:deploy`.
-7. Run `npm run db:seed`.
-8. Run `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`.
+2. Copy `.env.example` to `.env`.
+3. Set local `DATABASE_URL` and `JWT_SECRET`.
+4. Create the PostgreSQL database named in `DATABASE_URL`.
+5. Run `npm run db:generate`.
+6. Run `npm run db:validate`.
+7. Run `npm run db:migrate:deploy`.
+8. Run `npm run db:seed`.
+9. Run `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run build`.
 
-No real secrets or local `.env` files are required in Git. The tracked lockfile, Prisma schema, migrations, migration lock file, and workspace package files are enough to reproduce install/build after local environment setup.
+No real secrets or local environment files are required in Git. The tracked lockfile, package files, Prisma schema, migrations, migration lock file, and configuration files are enough to reproduce the project after local environment setup.

@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
@@ -16,7 +12,7 @@ import { EmptyState } from "@/features/ui/EmptyState";
 import {
   ButtonSpinner,
   LoadingState,
-  SkeletonBlock
+  SkeletonBlock,
 } from "@/features/ui/Loading";
 import { formatCurrency } from "@/features/ui/price";
 import {
@@ -24,7 +20,7 @@ import {
   getCart,
   getProducts,
   removeCartItem,
-  updateCartItemQuantity
+  updateCartItemQuantity,
 } from "@/services/api";
 import type { Cart, CartLineItem } from "@/types/cart";
 import type { ProductListItem, ProductVariantListItem } from "@/types/products";
@@ -55,14 +51,14 @@ function clampQuantity(value: number, max: number): number {
 
 function getProductForItem(
   products: ProductListItem[],
-  item: CartLineItem
+  item: CartLineItem,
 ): ProductListItem | undefined {
   return products.find((product) => product.id === item.product.id);
 }
 
 function getVariantOptions(
   products: ProductListItem[],
-  item: CartLineItem
+  item: CartLineItem,
 ): ProductVariantListItem[] {
   const product = getProductForItem(products, item);
 
@@ -77,13 +73,42 @@ function getStockLabel(item: CartLineItem): string {
   return `${item.variant.stock} available`;
 }
 
+const primaryButtonClassName =
+  "inline-flex min-h-[var(--control-height)] items-center justify-center gap-2 rounded-[var(--radius)] border border-[var(--accent)] bg-[var(--accent)] px-[18px] text-center font-extrabold leading-none text-white no-underline transition hover:-translate-y-px hover:border-[var(--accent-strong)] hover:bg-[var(--accent-strong)] hover:shadow-[var(--shadow-sm)] disabled:cursor-not-allowed disabled:opacity-[0.55]";
+
+const secondaryButtonClassName =
+  "inline-flex min-h-[var(--control-height)] items-center justify-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-white px-[18px] text-center font-extrabold leading-none text-[var(--foreground)] no-underline transition hover:-translate-y-px hover:border-[var(--accent)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent-strong)] hover:shadow-[var(--shadow-sm)] disabled:cursor-not-allowed disabled:opacity-[0.55]";
+
+const dangerButtonClassName =
+  "inline-flex min-h-[var(--control-height)] w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] border border-[#f3b6b1] bg-white px-4 text-center font-extrabold leading-none text-[var(--danger)] no-underline transition enabled:hover:-translate-y-px enabled:hover:border-[var(--danger)] enabled:hover:bg-[var(--danger-bg)] enabled:hover:shadow-[var(--shadow-sm)] disabled:cursor-not-allowed disabled:opacity-[0.55] md:col-span-2 xl:col-span-1 xl:w-auto";
+
+const cartLinesClassName = "grid min-w-0 gap-3.5";
+
+const cartLineClassName =
+  "grid min-h-[126px] min-w-0 grid-cols-1 gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] p-4 shadow-[0_1px_2px_rgb(23_32_51_/_4%)] md:grid-cols-2 xl:grid-cols-[minmax(140px,1.4fr)_minmax(180px,1.1fr)_minmax(80px,0.55fr)_132px_minmax(84px,0.6fr)_auto] xl:items-center";
+
+const cartAlertClassName =
+  "flex flex-col gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] p-3.5 shadow-[0_1px_2px_rgb(23_32_51_/_4%)] sm:flex-row sm:items-center sm:justify-between";
+
+const cartErrorAlertClassName = `${cartAlertClassName} border-[#f3b6b1] bg-[#fff8f7]`;
+
+const cartSummaryClassName =
+  "grid min-w-0 gap-[18px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] p-5 shadow-[var(--shadow-sm)] max-sm:p-4 xl:sticky xl:top-[92px] xl:min-w-[280px]";
+
+const fieldLabelClassName = "grid min-w-0 gap-2 md:col-span-2 xl:col-span-1";
+
+const selectClassName =
+  "min-h-[42px] w-full min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-white px-2.5 py-2 text-[var(--foreground)] transition hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none focus:ring-4 focus:ring-[var(--focus-ring)] disabled:bg-[#eef2f7] disabled:text-[var(--muted)]";
+
+const priceBlockClassName = "grid min-w-0 gap-[7px]";
+
 export function CartView(): React.ReactElement {
   const { status } = useAuth();
   const queryClient = useQueryClient();
   const isAuthenticated = status === "authenticated";
   const lineLocksRef = useRef<Set<number>>(new Set());
   const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>(
-    {}
+    {},
   );
 
   const {
@@ -92,11 +117,11 @@ export function CartView(): React.ReactElement {
     isError: isCartError,
     isFetching: isCartFetching,
     isLoading: isCartLoading,
-    refetch: refetchCart
+    refetch: refetchCart,
   } = useQuery({
     enabled: isAuthenticated,
     queryFn: getCart,
-    queryKey: cartQueryKey
+    queryKey: cartQueryKey,
   });
   const {
     data: products = [],
@@ -104,11 +129,11 @@ export function CartView(): React.ReactElement {
     isError: isProductsError,
     isFetching: isProductsFetching,
     isLoading: isProductsLoading,
-    refetch: refetchProducts
+    refetch: refetchProducts,
   } = useQuery({
     enabled: isAuthenticated,
     queryFn: getProducts,
-    queryKey: queryKeys.products
+    queryKey: queryKeys.products,
   });
 
   useEffect(() => {
@@ -118,8 +143,8 @@ export function CartView(): React.ReactElement {
 
     setQuantityDrafts(
       Object.fromEntries(
-        cart.items.map((item) => [item.id, String(item.quantity)])
-      )
+        cart.items.map((item) => [item.id, String(item.quantity)]),
+      ),
     );
   }, [cart]);
 
@@ -130,7 +155,7 @@ export function CartView(): React.ReactElement {
   const quantityMutation = useMutation({
     mutationFn: ({
       cartItemId,
-      quantity
+      quantity,
     }: {
       cartItemId: number;
       quantity: number;
@@ -138,12 +163,12 @@ export function CartView(): React.ReactElement {
     onSuccess: updateCartCache,
     onSettled: (_data, _error, variables) => {
       lineLocksRef.current.delete(variables.cartItemId);
-    }
+    },
   });
   const variantMutation = useMutation({
     mutationFn: ({
       cartItemId,
-      variantId
+      variantId,
     }: {
       cartItemId: number;
       variantId: number;
@@ -151,14 +176,14 @@ export function CartView(): React.ReactElement {
     onSuccess: updateCartCache,
     onSettled: (_data, _error, variables) => {
       lineLocksRef.current.delete(variables.cartItemId);
-    }
+    },
   });
   const removeMutation = useMutation({
     mutationFn: removeCartItem,
     onSuccess: updateCartCache,
     onSettled: (_data, _error, variables) => {
       lineLocksRef.current.delete(variables);
-    }
+    },
   });
 
   const mutationError =
@@ -169,14 +194,14 @@ export function CartView(): React.ReactElement {
         [
           quantityMutation.variables?.cartItemId,
           variantMutation.variables?.cartItemId,
-          removeMutation.variables
-        ].filter((value): value is number => typeof value === "number")
+          removeMutation.variables,
+        ].filter((value): value is number => typeof value === "number"),
       ),
     [
       quantityMutation.variables,
       variantMutation.variables,
-      removeMutation.variables
-    ]
+      removeMutation.variables,
+    ],
   );
 
   function isLinePending(cartItemId: number): boolean {
@@ -217,7 +242,9 @@ export function CartView(): React.ReactElement {
 
     setQuantityDrafts((drafts) => ({
       ...drafts,
-      [item.id]: String(clampQuantity(Number(numericValue), item.variant.stock))
+      [item.id]: String(
+        clampQuantity(Number(numericValue), item.variant.stock),
+      ),
     }));
   }
 
@@ -228,12 +255,12 @@ export function CartView(): React.ReactElement {
 
     const nextQuantity = clampQuantity(
       Number(quantityDrafts[item.id]),
-      item.variant.stock
+      item.variant.stock,
     );
 
     setQuantityDrafts((drafts) => ({
       ...drafts,
-      [item.id]: String(nextQuantity)
+      [item.id]: String(nextQuantity),
     }));
 
     if (nextQuantity === item.quantity || item.variant.stock < 1) {
@@ -243,7 +270,7 @@ export function CartView(): React.ReactElement {
     lineLocksRef.current.add(item.id);
     quantityMutation.mutate({
       cartItemId: item.id,
-      quantity: nextQuantity
+      quantity: nextQuantity,
     });
   }
 
@@ -254,7 +281,7 @@ export function CartView(): React.ReactElement {
 
     const nextQuantity = clampQuantity(
       item.quantity + delta,
-      item.variant.stock
+      item.variant.stock,
     );
 
     if (nextQuantity === item.quantity || item.variant.stock < 1) {
@@ -264,11 +291,11 @@ export function CartView(): React.ReactElement {
     lineLocksRef.current.add(item.id);
     setQuantityDrafts((drafts) => ({
       ...drafts,
-      [item.id]: String(nextQuantity)
+      [item.id]: String(nextQuantity),
     }));
     quantityMutation.mutate({
       cartItemId: item.id,
-      quantity: nextQuantity
+      quantity: nextQuantity,
     });
   }
 
@@ -280,7 +307,7 @@ export function CartView(): React.ReactElement {
     lineLocksRef.current.add(item.id);
     variantMutation.mutate({
       cartItemId: item.id,
-      variantId
+      variantId,
     });
   }
 
@@ -320,9 +347,9 @@ export function CartView(): React.ReactElement {
             {isCartLoading ? (
               <>
                 <LoadingState message="Loading cart..." />
-                <div className="cart-lines" aria-hidden="true">
+                <div className={cartLinesClassName} aria-hidden="true">
                   {Array.from({ length: 2 }, (_, index) => (
-                    <article className="cart-line" key={index}>
+                    <article className={cartLineClassName} key={index}>
                       <SkeletonBlock className="skeleton--title" />
                       <SkeletonBlock />
                       <SkeletonBlock className="skeleton--price" />
@@ -341,7 +368,7 @@ export function CartView(): React.ReactElement {
                   {getFriendlyErrorMessage(
                     cartError,
                     "cart",
-                    "Unable to load your cart."
+                    "Unable to load your cart.",
                   )}
                 </p>
                 <button
@@ -375,19 +402,19 @@ export function CartView(): React.ReactElement {
             ) : null}
 
             {!isCartLoading && !isCartError && cart && cart.items.length > 0 ? (
-              <div className="cart-layout">
-                <div className="cart-lines" aria-label="Cart items">
+              <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
+                <div className={cartLinesClassName} aria-label="Cart items">
                   {isProductsError ? (
-                    <div className="cart-alert" role="alert">
+                    <div className={cartAlertClassName} role="alert">
                       <p className="message message--error">
                         {getFriendlyErrorMessage(
                           productsError,
                           "products",
-                          "Unable to load variant choices."
+                          "Unable to load variant choices.",
                         )}
                       </p>
                       <button
-                        className="button button--secondary"
+                        className={secondaryButtonClassName}
                         disabled={isProductsFetching}
                         onClick={() => void refetchProducts()}
                         type="button"
@@ -405,12 +432,12 @@ export function CartView(): React.ReactElement {
                   ) : null}
 
                   {mutationError ? (
-                    <div className="cart-alert cart-alert--error" role="alert">
+                    <div className={cartErrorAlertClassName} role="alert">
                       <p className="message message--error">
                         {getFriendlyErrorMessage(
                           mutationError,
                           "cartMutation",
-                          "Unable to update your cart."
+                          "Unable to update your cart.",
                         )}
                       </p>
                     </div>
@@ -433,12 +460,14 @@ export function CartView(): React.ReactElement {
                     return (
                       <article
                         aria-busy={isPending}
-                        className="cart-line"
+                        className={cartLineClassName}
                         key={item.id}
                       >
-                        <div className="cart-line__details">
-                          <h2>{item.product.title}</h2>
-                          <p className="cart-line__variant">
+                        <div className="grid min-w-0 gap-[7px] md:col-span-2 xl:col-span-1">
+                          <h2 className="m-0 break-words text-base leading-[1.35]">
+                            {item.product.title}
+                          </h2>
+                          <p className="m-0 break-words font-bold text-[var(--accent-strong)]">
                             {formatVariantLabel(item.variant)}
                           </p>
                           <p className="message">{getStockLabel(item)}</p>
@@ -449,14 +478,17 @@ export function CartView(): React.ReactElement {
                           ) : null}
                         </div>
 
-                        <label className="cart-select">
-                          <span>Selected variant</span>
+                        <label className={fieldLabelClassName}>
+                          <span className="text-[0.82rem] font-extrabold text-[var(--foreground)]">
+                            Selected variant
+                          </span>
                           <select
+                            className={selectClassName}
                             disabled={isVariantSelectDisabled}
                             onChange={(event) =>
                               handleVariantChange(
                                 item,
-                                Number(event.target.value)
+                                Number(event.target.value),
                               )
                             }
                             value={item.variant.id}
@@ -486,16 +518,19 @@ export function CartView(): React.ReactElement {
                           </select>
                         </label>
 
-                        <div className="cart-price-block">
+                        <div className={priceBlockClassName}>
                           <span className="status-label">Unit price</span>
-                          <strong>{formatCurrency(item.unitPrice)}</strong>
+                          <strong className="break-words text-[1.02rem]">
+                            {formatCurrency(item.unitPrice)}
+                          </strong>
                         </div>
 
-                        <div className="cart-quantity">
+                        <div className="grid min-w-0 gap-[7px]">
                           <span className="status-label">Quantity</span>
-                          <div className="cart-quantity__controls">
+                          <div className="grid min-h-[var(--control-height)] w-full grid-cols-[36px_minmax(52px,1fr)_36px] sm:w-[132px]">
                             <button
                               aria-label={`Decrease ${item.product.title} quantity`}
+                              className="min-w-0 cursor-pointer rounded-l-[var(--radius)] border border-[var(--border)] bg-white text-center font-extrabold text-[var(--foreground)] transition enabled:hover:border-[var(--accent)] enabled:hover:bg-[var(--accent-soft)] enabled:hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-[0.55]"
                               disabled={
                                 isPending ||
                                 item.quantity <= 1 ||
@@ -512,6 +547,7 @@ export function CartView(): React.ReactElement {
                             </button>
                             <input
                               aria-label={`Quantity for ${item.product.title}`}
+                              className="min-w-0 rounded-none border-y border-[var(--border)] bg-white text-center text-[var(--foreground)] disabled:bg-[#eef2f7] disabled:text-[var(--muted)]"
                               disabled={isPending || item.variant.stock < 1}
                               inputMode="numeric"
                               max={Math.max(item.variant.stock, 1)}
@@ -520,7 +556,7 @@ export function CartView(): React.ReactElement {
                               onChange={(event) =>
                                 handleQuantityDraftChange(
                                   item,
-                                  event.target.value
+                                  event.target.value,
                                 )
                               }
                               onKeyDown={(event) => {
@@ -533,6 +569,7 @@ export function CartView(): React.ReactElement {
                             />
                             <button
                               aria-label={`Increase ${item.product.title} quantity`}
+                              className="min-w-0 cursor-pointer rounded-r-[var(--radius)] border border-[var(--border)] bg-white text-center font-extrabold text-[var(--foreground)] transition enabled:hover:border-[var(--accent)] enabled:hover:bg-[var(--accent-soft)] enabled:hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-[0.55]"
                               disabled={
                                 isPending ||
                                 item.quantity >= item.variant.stock ||
@@ -550,13 +587,17 @@ export function CartView(): React.ReactElement {
                           </div>
                         </div>
 
-                        <div className="cart-price-block cart-price-block--subtotal">
+                        <div
+                          className={`${priceBlockClassName} md:col-span-1 xl:col-span-1`}
+                        >
                           <span className="status-label">Subtotal</span>
-                          <strong>{formatCurrency(item.subtotal)}</strong>
+                          <strong className="break-words text-[1.28rem]">
+                            {formatCurrency(item.subtotal)}
+                          </strong>
                         </div>
 
                         <button
-                          className="button button--danger cart-remove"
+                          className={dangerButtonClassName}
                           disabled={isPending}
                           onClick={() => handleRemove(item)}
                           type="button"
@@ -575,15 +616,20 @@ export function CartView(): React.ReactElement {
                   })}
                 </div>
 
-                <aside className="cart-summary" aria-label="Cart summary">
+                <aside
+                  className={cartSummaryClassName}
+                  aria-label="Cart summary"
+                >
                   <div>
                     <span className="status-label">Total</span>
-                    <strong>{formatCurrency(cart.total)}</strong>
+                    <strong className="text-[1.28rem]">
+                      {formatCurrency(cart.total)}
+                    </strong>
                   </div>
-                  <Link className="button" href="/checkout">
+                  <Link className={primaryButtonClassName} href="/checkout">
                     Checkout
                   </Link>
-                  <Link className="button button--secondary" href="/products">
+                  <Link className={secondaryButtonClassName} href="/products">
                     Browse products
                   </Link>
                 </aside>

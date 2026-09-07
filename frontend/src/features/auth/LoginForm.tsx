@@ -1,9 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { ApiClientError } from "@/services/api";
+import {
+  getLoginValidationMessage,
+  isLoginBusy
+} from "@/features/auth/login-state";
+import { consumeSessionExpiredMessage } from "@/features/auth/session-expiration";
+import { getFriendlyErrorMessage } from "@/features/errors/api-errors";
+import { ButtonSpinner } from "@/features/ui/Loading";
 
 const DEMO_EMAIL = "demo@ecommerce.local";
 const DEMO_PASSWORD = "DemoUser@2026";
@@ -15,6 +21,7 @@ export function LoginForm(): React.ReactElement {
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -25,11 +32,18 @@ export function LoginForm(): React.ReactElement {
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
-    if (!email.trim() || !password) {
-      setErrorMessage("Email and password are required.");
+    if (isBusy || submitLockRef.current) {
       return;
     }
 
+    const validationMessage = getLoginValidationMessage(email, password);
+
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      return;
+    }
+
+    submitLockRef.current = true;
     setErrorMessage(null);
     setIsSubmitting(true);
 
@@ -37,18 +51,27 @@ export function LoginForm(): React.ReactElement {
       await login({ email, password });
       router.replace("/products");
     } catch (error) {
-      const message =
-        error instanceof ApiClientError || error instanceof Error
-          ? error.message
-          : "Unable to sign in right now.";
-
-      setErrorMessage(message);
+      setErrorMessage(
+        getFriendlyErrorMessage(error, "login", "Unable to sign in right now.")
+      );
     } finally {
+      submitLockRef.current = false;
       setIsSubmitting(false);
     }
   }
 
-  const isBusy = isSubmitting || status === "loading";
+  useEffect(() => {
+    const message = consumeSessionExpiredMessage();
+
+    if (message) {
+      setErrorMessage(message);
+    }
+  }, []);
+
+  const isBusy = isLoginBusy({
+    authStatus: status,
+    isSubmitting
+  });
 
   return (
     <section className="auth-panel" aria-labelledby="login-title">
@@ -60,7 +83,12 @@ export function LoginForm(): React.ReactElement {
         </p>
       </div>
 
-      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+      <form
+        aria-busy={isBusy}
+        className="auth-form"
+        onSubmit={handleSubmit}
+        noValidate
+      >
         <label className="form-field" htmlFor="email">
           <span>Email</span>
           <input
@@ -96,7 +124,14 @@ export function LoginForm(): React.ReactElement {
         ) : null}
 
         <button className="button" disabled={isBusy} type="submit">
-          {isSubmitting ? "Signing in..." : "Sign in"}
+          {isSubmitting ? (
+            <>
+              <ButtonSpinner label="Signing in" />
+              Signing in...
+            </>
+          ) : (
+            "Sign in"
+          )}
         </button>
       </form>
 

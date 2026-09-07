@@ -1,8 +1,22 @@
 import { env } from "@/config/env";
 import { getStoredAccessToken } from "@/features/auth/auth-storage";
+import { notifySessionExpired } from "@/features/auth/session-expiration";
 import type { ApiResponse, ApiValidationIssue } from "@/types/api";
 import type { LoginRequest, LoginResponse, AuthUser } from "@/types/auth";
+import type {
+  AddCartItemRequest,
+  Cart,
+  CartItem,
+  ChangeCartVariantRequest,
+  UpdateCartQuantityRequest
+} from "@/types/cart";
+import type { CheckoutOrder } from "@/types/checkout";
 import type { HealthStatusData } from "@/types/health";
+import type { ProductDetail, ProductListItem } from "@/types/products";
+import type {
+  AddWishlistItemRequest,
+  WishlistProduct
+} from "@/types/wishlist";
 
 export class ApiClientError extends Error {
   constructor(
@@ -49,19 +63,41 @@ async function request<TData>(
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     cache: "no-store"
+  }).catch(() => {
+    throw new ApiClientError(
+      "The API is unavailable.",
+      0,
+      "SERVICE_UNAVAILABLE"
+    );
   });
 
-  const payload = (await response.json()) as ApiResponse<TData>;
+  const payload = (await response.json().catch(() => {
+    throw new ApiClientError(
+      "The API is unavailable.",
+      response.status,
+      "SERVICE_UNAVAILABLE"
+    );
+  })) as ApiResponse<TData>;
 
   if (!response.ok || !payload.success) {
     if (payload.success === false) {
-      throw new ApiClientError(
+      const error = new ApiClientError(
         payload.error.message,
         response.status,
         payload.error.code,
         payload.error.requestId,
         payload.error.details
       );
+
+      if (
+        response.status === 401 &&
+        options.auth !== false &&
+        Boolean(accessToken)
+      ) {
+        notifySessionExpired();
+      }
+
+      throw error;
     }
 
     throw new ApiClientError(
@@ -89,4 +125,86 @@ export function getCurrentUser(accessToken?: string | null): Promise<AuthUser> {
   return request<AuthUser>("/auth/me", {
     accessToken
   });
+}
+
+export function getProducts(): Promise<ProductListItem[]> {
+  return request<ProductListItem[]>("/products");
+}
+
+export function getProduct(productId: string | number): Promise<ProductDetail> {
+  return request<ProductDetail>(`/products/${encodeURIComponent(productId)}`);
+}
+
+export function getCart(): Promise<Cart> {
+  return request<Cart>("/cart");
+}
+
+export function addCartItem(body: AddCartItemRequest): Promise<CartItem> {
+  return request<CartItem>("/cart/items", {
+    method: "POST",
+    body
+  });
+}
+
+export function updateCartItemQuantity(
+  cartItemId: number,
+  body: UpdateCartQuantityRequest
+): Promise<Cart> {
+  return request<Cart>(`/cart/items/${encodeURIComponent(cartItemId)}`, {
+    method: "PATCH",
+    body
+  });
+}
+
+export function changeCartItemVariant(
+  cartItemId: number,
+  body: ChangeCartVariantRequest
+): Promise<Cart> {
+  return request<Cart>(
+    `/cart/items/${encodeURIComponent(cartItemId)}/variant`,
+    {
+      method: "PATCH",
+      body
+    }
+  );
+}
+
+export function removeCartItem(cartItemId: number): Promise<Cart> {
+  return request<Cart>(`/cart/items/${encodeURIComponent(cartItemId)}`, {
+    method: "DELETE"
+  });
+}
+
+export function placeOrder(): Promise<CheckoutOrder> {
+  return request<CheckoutOrder>("/checkout", {
+    method: "POST"
+  });
+}
+
+export function getOrder(orderId: string | number): Promise<CheckoutOrder> {
+  return request<CheckoutOrder>(`/orders/${encodeURIComponent(orderId)}`);
+}
+
+export function getWishlist(): Promise<WishlistProduct[]> {
+  return request<WishlistProduct[]>("/wishlist");
+}
+
+export function addWishlistItem(
+  body: AddWishlistItemRequest
+): Promise<WishlistProduct> {
+  return request<WishlistProduct>("/wishlist/items", {
+    method: "POST",
+    body
+  });
+}
+
+export function removeWishlistItem(
+  productId: number
+): Promise<WishlistProduct[]> {
+  return request<WishlistProduct[]>(
+    `/wishlist/items/${encodeURIComponent(productId)}`,
+    {
+      method: "DELETE"
+    }
+  );
 }

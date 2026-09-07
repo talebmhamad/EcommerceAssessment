@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "test": "node --import tsx --test --test-reporter spec src/test/api-client.test.ts src/test/frontend.behavior.test.tsx",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -12,6 +13,7 @@
     "format:write": "prettier --write ."
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.102.8",
     "next": "^16.3.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

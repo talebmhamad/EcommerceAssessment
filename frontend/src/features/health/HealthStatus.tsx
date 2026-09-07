@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiClientError, getBackendHealth } from "@/services/api";
+import { getFriendlyErrorMessage } from "@/features/errors/api-errors";
+import { getBackendHealth } from "@/services/api";
 import type { HealthStatusData } from "@/types/health";
 
 type LoadState =
@@ -30,10 +31,11 @@ export function HealthStatus(): React.ReactElement {
           setState({ status: "success", data });
         }
       } catch (error) {
-        const message =
-          error instanceof ApiClientError || error instanceof Error
-            ? error.message
-            : "Unable to reach the backend health endpoint.";
+        const message = getFriendlyErrorMessage(
+          error,
+          "health",
+          "Unable to reach the backend health endpoint."
+        );
 
         if (isMounted) {
           setState({ status: "error", message });

@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { getProtectedRouteState } from "@/features/auth/protected-route-state";
+import { AppNav } from "@/features/navigation/AppNav";
+import { LoadingState } from "@/features/ui/Loading";
 
 type ProtectedRouteProps = {
   children: React.ReactNode;
@@ -13,22 +16,26 @@ export function ProtectedRoute({
 }: ProtectedRouteProps): React.ReactElement {
   const router = useRouter();
   const { status } = useAuth();
+  const routeState = getProtectedRouteState(status);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
+    if (routeState === "redirecting") {
       router.replace("/login");
     }
-  }, [router, status]);
+  }, [routeState, router]);
 
-  if (status !== "authenticated") {
+  if (routeState !== "content") {
     return (
       <main className="page-shell page-shell--centered">
-        <section className="auth-panel" aria-live="polite">
-          <p className="message">Checking your session...</p>
-        </section>
+        <LoadingState message="Checking your session..." />
       </main>
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <AppNav />
+      {children}
+    </>
+  );
 }

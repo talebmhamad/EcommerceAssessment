@@ -1,11 +1,5 @@
-import { ProtectedPlaceholder } from "@/features/auth/ProtectedPlaceholder";
+import { WishlistView } from "@/features/wishlist/WishlistView";
 
 export default function WishlistPage(): React.ReactElement {
-  return (
-    <ProtectedPlaceholder
-      description="Wishlist functionality will be added in a later task."
-      eyebrow="Protected"
-      title="Wishlist workspace"
-    />
-  );
+  return <WishlistView />;
 }

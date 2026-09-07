@@ -14,6 +14,12 @@ import {
   readStoredAuthState,
   writeStoredAuthState
 } from "@/features/auth/auth-storage";
+import {
+  clearSessionExpiredMessage,
+  listenForSessionExpiration,
+  notifySessionExpired
+} from "@/features/auth/session-expiration";
+import { isExpiredAuthenticationError } from "@/features/errors/api-errors";
 import { getCurrentUser, login as loginRequest } from "@/services/api";
 import type { AuthUser, LoginRequest, StoredAuthState } from "@/types/auth";
 
@@ -38,11 +44,23 @@ export function AuthProvider({
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [authState, setAuthState] = useState<StoredAuthState | null>(null);
 
-  const clearAuth = useCallback((): void => {
+  const clearAuthState = useCallback((): void => {
     clearStoredAuthState();
     setAuthState(null);
     setStatus("unauthenticated");
   }, []);
+
+  const clearAuth = useCallback((): void => {
+    clearSessionExpiredMessage();
+    clearAuthState();
+  }, [clearAuthState]);
+
+  const expireAuth = useCallback((): void => {
+    clearAuthState();
+    router.replace("/login");
+  }, [clearAuthState, router]);
+
+  useEffect(() => listenForSessionExpiration(expireAuth), [expireAuth]);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,9 +87,14 @@ export function AuthProvider({
           setAuthState(refreshedAuthState);
           setStatus("authenticated");
         }
-      } catch {
+      } catch (error) {
         if (isMounted) {
-          clearAuth();
+          if (isExpiredAuthenticationError(error)) {
+            notifySessionExpired();
+            expireAuth();
+          } else {
+            clearAuth();
+          }
         }
       }
     }
@@ -81,7 +104,7 @@ export function AuthProvider({
     return () => {
       isMounted = false;
     };
-  }, [clearAuth]);
+  }, [clearAuth, expireAuth]);
 
   const login = useCallback(async (credentials: LoginRequest): Promise<void> => {
     const result = await loginRequest(credentials);
@@ -91,6 +114,7 @@ export function AuthProvider({
     };
 
     writeStoredAuthState(nextAuthState);
+    clearSessionExpiredMessage();
     setAuthState(nextAuthState);
     setStatus("authenticated");
   }, []);

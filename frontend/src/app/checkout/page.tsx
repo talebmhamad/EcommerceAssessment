@@ -1,11 +1,5 @@
-import { ProtectedPlaceholder } from "@/features/auth/ProtectedPlaceholder";
+import { CheckoutView } from "@/features/checkout/CheckoutView";
 
 export default function CheckoutPage(): React.ReactElement {
-  return (
-    <ProtectedPlaceholder
-      description="Checkout functionality will be added in a later task."
-      eyebrow="Protected"
-      title="Checkout workspace"
-    />
-  );
+  return <CheckoutView />;
 }

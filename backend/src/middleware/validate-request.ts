@@ -1,6 +1,10 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { ZodError, type ZodTypeAny } from "zod";
-import { validationError, type ValidationIssue } from "../shared/errors/api-error";
+import {
+  badRequest,
+  validationError,
+  type ValidationIssue
+} from "../shared/errors/api-error";
 
 type RequestValidationSchemas = {
   body?: ZodTypeAny;
@@ -80,6 +84,23 @@ export function validateBody(schema: ZodTypeAny): RequestHandler {
 
 export function validateParams(schema: ZodTypeAny): RequestHandler {
   return validateRequest({ params: schema });
+}
+
+export function validateParamsAsBadRequest(schema: ZodTypeAny): RequestHandler {
+  return (request: Request, _response: Response, next: NextFunction): void => {
+    const result = schema.safeParse(request.params);
+
+    if (!result.success) {
+      const [firstIssue] = result.error.issues;
+
+      next(badRequest(firstIssue?.message ?? "Invalid route parameters."));
+      return;
+    }
+
+    const parsedParams: unknown = result.data;
+    request.params = parsedParams as Request["params"];
+    next();
+  };
 }
 
 export function validateQuery(schema: ZodTypeAny): RequestHandler {

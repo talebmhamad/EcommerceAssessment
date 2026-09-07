@@ -8,7 +8,12 @@ import { notFoundMiddleware } from "./middleware/not-found";
 import { requestIdMiddleware } from "./middleware/request-id";
 import { requestLoggerMiddleware } from "./middleware/request-logger";
 import { authRouter } from "./modules/auth/auth.routes";
+import { cartRouter } from "./modules/cart/cart.routes";
+import { checkoutRouter } from "./modules/checkout/checkout.routes";
 import { healthRouter } from "./modules/health/health.routes";
+import { ordersRouter } from "./modules/orders/orders.routes";
+import { productsRouter } from "./modules/products/products.routes";
+import { wishlistRouter } from "./modules/wishlist/wishlist.routes";
 
 export function createApp(): express.Express {
   const app = express();
@@ -25,6 +30,11 @@ export function createApp(): express.Express {
 
   app.use("/api/auth", authRouter);
   app.use("/api", healthRouter);
+  app.use("/api", productsRouter);
+  app.use("/api", cartRouter);
+  app.use("/api", wishlistRouter);
+  app.use("/api", checkoutRouter);
+  app.use("/api", ordersRouter);
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);

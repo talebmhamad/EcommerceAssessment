@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { unauthorized } from "../../shared/errors/api-error";
 import { createSuccessResponse } from "../../shared/utilities/api-response";
+import { getAuthenticatedUserId } from "../../shared/utilities/auth-request";
 import type { LoginBody } from "../../validation/request-schemas";
 import {
   getAuthenticatedUserById,
@@ -21,11 +21,8 @@ export async function getCurrentUser(
   request: Request,
   response: Response
 ): Promise<Response> {
-  if (!request.auth) {
-    throw unauthorized();
-  }
-
-  const user = await getAuthenticatedUserById(request.auth.userId);
+  const userId = getAuthenticatedUserId(request);
+  const user = await getAuthenticatedUserById(userId);
 
   return response.status(200).json(createSuccessResponse(user));
 }

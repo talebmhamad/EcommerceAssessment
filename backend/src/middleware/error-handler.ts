@@ -5,7 +5,8 @@ import {
   ApiError,
   badRequest,
   conflict,
-  notFound
+  notFound,
+  serviceUnavailable
 } from "../shared/errors/api-error";
 import { createErrorResponse } from "../shared/utilities/api-response";
 import { formatRequestId } from "../shared/utilities/request-id";
@@ -54,6 +55,20 @@ function normalizeError(error: unknown): ApiError {
     if (error.code === "P2025") {
       return notFound("Resource not found.");
     }
+
+    if (error.code === "P2003") {
+      return conflict("Referenced data changed. Please refresh and try again.");
+    }
+
+    if (error.code === "P2034") {
+      return conflict(
+        "The request conflicted with another update. Please try again."
+      );
+    }
+  }
+
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return serviceUnavailable("Service is temporarily unavailable.");
   }
 
   return new ApiError({

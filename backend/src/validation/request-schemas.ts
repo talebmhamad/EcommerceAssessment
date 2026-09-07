@@ -61,10 +61,22 @@ export const productVariantIdParamsSchema = z
   })
   .strict();
 
+export const cartItemIdParamsSchema = z
+  .object({
+    cartItemId: routeIdSchema("Cart item ID")
+  })
+  .strict();
+
+export const orderIdParamsSchema = z
+  .object({
+    orderId: routeIdSchema("Order ID")
+  })
+  .strict();
+
 export const addToCartBodySchema = z
   .object({
     productId: positiveIntegerSchema("Product ID"),
-    productVariantId: positiveIntegerSchema("Product variant ID"),
+    variantId: positiveIntegerSchema("Product variant ID"),
     quantity: positiveIntegerSchema("Quantity").max(
       999,
       "Quantity must be between 1 and 999."
@@ -83,13 +95,27 @@ export const updateCartQuantityBodySchema = z
 
 export const changeCartVariantBodySchema = z
   .object({
-    productVariantId: positiveIntegerSchema("Product variant ID")
+    variantId: positiveIntegerSchema("Product variant ID")
   })
   .strict();
+
+export const addToWishlistBodySchema = z
+  .object({
+    productId: positiveIntegerSchema("Product ID")
+  })
+  .strict();
+
+export const validateCheckoutBodySchema = z.preprocess(
+  (value) => value ?? {},
+  z.object({}).strict()
+);
 
 export type LoginBody = z.infer<typeof loginBodySchema>;
 export type ProductIdParams = z.infer<typeof productIdParamsSchema>;
 export type ProductVariantIdParams = z.infer<typeof productVariantIdParamsSchema>;
+export type CartItemIdParams = z.infer<typeof cartItemIdParamsSchema>;
+export type OrderIdParams = z.infer<typeof orderIdParamsSchema>;
 export type AddToCartBody = z.infer<typeof addToCartBodySchema>;
 export type UpdateCartQuantityBody = z.infer<typeof updateCartQuantityBodySchema>;
 export type ChangeCartVariantBody = z.infer<typeof changeCartVariantBodySchema>;
+export type AddToWishlistBody = z.infer<typeof addToWishlistBodySchema>;

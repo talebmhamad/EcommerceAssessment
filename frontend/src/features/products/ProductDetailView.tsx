@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
+import { cartMutationKey, createCartMutationOptions } from "@/features/cart/cart-query";
 import { mergeCartItem } from "@/features/cart/cart-cache";
 import { getFriendlyErrorMessage } from "@/features/errors/api-errors";
 import { queryKeys } from "@/features/query/query-keys";
@@ -52,7 +53,7 @@ export function ProductDetailView({
   const { status } = useAuth();
   const queryClient = useQueryClient();
   const isAuthenticated = status === "authenticated";
-  const cartSubmitLockRef = useRef(false);
+  const isCartMutating = useIsMutating({ mutationKey: cartMutationKey }) > 0;
   const wishlistSubmitLockRef = useRef(false);
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(
     null
@@ -91,7 +92,7 @@ export function ProductDetailView({
       wishlistSubmitLockRef.current = false;
     }
   });
-  const cartMutation = useMutation({
+  const cartMutation = useMutation(createCartMutationOptions(queryClient, {
     mutationFn: addCartItem,
     onSuccess: (cartItem, variables) => {
       const variant = product?.variants.find(
@@ -105,12 +106,8 @@ export function ProductDetailView({
       }
 
       setCartSuccessMessage("Added to cart.");
-      void queryClient.invalidateQueries({ queryKey: queryKeys.cart });
-    },
-    onSettled: () => {
-      cartSubmitLockRef.current = false;
     }
-  });
+  }));
 
   useEffect(() => {
     if (!product) {
@@ -162,12 +159,11 @@ export function ProductDetailView({
       !selectedVariant ||
       !canAddToCart ||
       cartMutation.isPending ||
-      cartSubmitLockRef.current
+      queryClient.isMutating({ mutationKey: cartMutationKey }) > 0
     ) {
       return;
     }
 
-    cartSubmitLockRef.current = true;
     setCartSuccessMessage(null);
     cartMutation.mutate({
       productId: product.id,
@@ -371,7 +367,7 @@ export function ProductDetailView({
                   <div className="purchase-actions">
                     <button
                       className="button"
-                      disabled={!canAddToCart || cartMutation.isPending}
+                      disabled={!canAddToCart || isCartMutating}
                       aria-busy={cartMutation.isPending}
                       onClick={handleAddToCart}
                       type="button"

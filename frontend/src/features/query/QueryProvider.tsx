@@ -1,27 +1,40 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+
+const retiredClients = new WeakSet<QueryClient>();
+
+export function isSessionQueryClientActive(client: QueryClient): boolean {
+  return !retiredClients.has(client);
+}
+export function createSessionQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        refetchOnWindowFocus: false,
+        retry: 1,
+        staleTime: 30_000
+      }
+    }
+  });
+}
+
+export function replaceSessionQueryClient(client: QueryClient): QueryClient {
+  retiredClients.add(client);
+  void client.cancelQueries();
+  client.clear();
+  // Late mutation callbacks retain the discarded client, never the new session.
+  return createSessionQueryClient();
+}
 
 export function QueryProvider({
-  children
+  children,
+  client
 }: Readonly<{
   children: React.ReactNode;
+  client: QueryClient;
 }>): React.ReactElement {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            refetchOnWindowFocus: false,
-            retry: 1,
-            staleTime: 30_000
-          }
-        }
-      })
-  );
-
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
 }

@@ -15,7 +15,12 @@ A TypeScript npm monorepo for a small e-commerce assessment. The app is split in
 - `backend`: Express API, feature modules, validation, business services, Prisma database access, and centralized error handling.
 - `backend/src/modules`: auth, products, cart, wishlist, checkout, orders, and health modules.
 - `backend/prisma`: Prisma schema, Prisma 7 config, migrations, seed script, and seed catalog data.
-- `docs`: supporting project documentation, including [database architecture](docs/database-architecture.md).
+- `docs`: supporting project documentation:
+
+  - [Database Architecture](docs/database-architecture.md)
+  - [Backend Architecture](docs/backend-architecture.md)
+  - [Frontend Architecture](docs/frontend-architecture.md)
+  - [AI Usage](docs/ai-usage.md)
 
 The frontend sends user choices such as selected IDs and quantities. The backend derives the user from the verified JWT, enforces ownership and stock rules, reads current database prices, and calculates all totals.
 

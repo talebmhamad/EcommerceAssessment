@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { MutationObserver } from "@tanstack/react-query";
+import { cartMutationKey, cartQueryKey, createCartMutationOptions } from "../features/cart/cart-query";
+import { createSessionQueryClient, replaceSessionQueryClient } from "../features/query/QueryProvider";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getLoginValidationMessage, isLoginBusy } from "../features/auth/login-state";
 import { getProtectedRouteState } from "../features/auth/protected-route-state";
@@ -248,4 +251,133 @@ test("friendly errors hide backend details and keep common actions understandabl
     getFriendlyErrorMessage(new Error("PrismaClientKnownRequestError"), "checkout"),
     "Something went wrong. Please try again."
   );
+});
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
+const flushTasks = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+test("session changes cancel reads and isolate late writes from the next account", async (t) => {
+  const oldClient = createSessionQueryClient();
+  const response = deferred<string>();
+  let signal: AbortSignal | undefined;
+  const pendingRead = oldClient.fetchQuery({
+    queryKey: ["wishlist"],
+    queryFn: (context) => { signal = context.signal; return response.promise; }
+  }).catch(() => undefined);
+  oldClient.setQueryData(cartQueryKey, { owner: "previous account" });
+  const nextClient = replaceSessionQueryClient(oldClient);
+  t.after(() => { oldClient.clear(); nextClient.clear(); });
+
+  assert.equal(signal?.aborted, true);
+  assert.equal(oldClient.getQueryCache().getAll().length, 0);
+  response.resolve("previous wishlist");
+  await pendingRead;
+  oldClient.setQueryData(cartQueryKey, { owner: "late previous account response" });
+  assert.equal(nextClient.getQueryData(cartQueryKey), undefined);
+  assert.equal(nextClient.getQueryData(["wishlist"]), undefined);
+});
+
+test("cart writes serialize and remain pending through the final cart refresh", async (t) => {
+  const client = createSessionQueryClient();
+  t.after(() => client.clear());
+  const firstResponse = deferred<number>();
+  const firstRefresh = deferred<number>();
+  const writes: number[] = [];
+  let serverQuantity = 1;
+  let refreshCount = 0;
+  await client.fetchQuery({
+    queryKey: cartQueryKey,
+    queryFn: async () => {
+      refreshCount += 1;
+      return refreshCount === 2 ? firstRefresh.promise : serverQuantity;
+    }
+  });
+  const makeMutation = (): MutationObserver<number, Error, number> => new MutationObserver(
+    client,
+    createCartMutationOptions(client, {
+      mutationFn: async (quantity: number) => {
+        writes.push(quantity);
+        if (quantity === 2) await firstResponse.promise;
+        serverQuantity = quantity;
+        return quantity;
+      },
+      onSuccess: (quantity) => { client.setQueryData(cartQueryKey, quantity); }
+    })
+  );
+  const first = makeMutation().mutate(2);
+  const second = makeMutation().mutate(3);
+  await flushTasks();
+  assert.deepEqual(writes, [2]);
+  assert.equal(client.isMutating({ mutationKey: cartMutationKey }), 2);
+  firstResponse.resolve(2);
+  await flushTasks();
+  assert.deepEqual(writes, [2], "next write must wait for reconciliation");
+  assert.equal(client.isMutating({ mutationKey: cartMutationKey }), 2);
+  firstRefresh.resolve(2);
+  await Promise.all([first, second]);
+  assert.deepEqual(writes, [2, 3]);
+  assert.equal(client.getQueryData(cartQueryKey), 3);
+  assert.equal(client.isMutating({ mutationKey: cartMutationKey }), 0);
+});
+
+test("failed cart writes restore confirmed state before refetching and keep checkout blocked", async (t) => {
+  const client = createSessionQueryClient();
+  t.after(() => client.clear());
+  const refreshedCart = deferred<number>();
+  let reads = 0;
+  let draftQuantity = 4;
+  await client.fetchQuery({
+    queryKey: cartQueryKey,
+    queryFn: async () => ++reads === 1 ? 2 : refreshedCart.promise
+  });
+  const mutation = new MutationObserver(client, createCartMutationOptions(client, {
+    mutationFn: async () => { throw new Error("Stock changed"); },
+    onError: () => { draftQuantity = client.getQueryData<number>(cartQueryKey)!; }
+  }));
+  const result = assert.rejects(mutation.mutate(undefined), /Stock changed/);
+  await flushTasks();
+  assert.equal(draftQuantity, 2);
+  assert.equal(reads, 2);
+  assert.equal(client.isMutating({ mutationKey: cartMutationKey }), 1);
+  refreshedCart.resolve(1);
+  await result;
+  assert.equal(client.getQueryData(cartQueryKey), 1);
+  assert.equal(client.isMutating({ mutationKey: cartMutationKey }), 0);
+});
+
+test("logout suppresses old mutation callbacks and prevents queued writes from starting", async (t) => {
+  const client = createSessionQueryClient();
+  const response = deferred<number>();
+  let callbacks = 0;
+  let queuedWrites = 0;
+  const first = new MutationObserver(client, createCartMutationOptions(client, {
+    mutationFn: () => response.promise,
+    onSuccess: () => { callbacks += 1; }
+  })).mutate(undefined);
+  await flushTasks();
+  const queued = new MutationObserver(client, createCartMutationOptions(client, {
+    mutationFn: async () => { queuedWrites += 1; return 2; }
+  })).mutate(undefined);
+  const queuedResult = assert.rejects(queued, /session has changed/);
+  await flushTasks();
+  const pausedMutation = client.getMutationCache().getAll().find((mutation) => mutation.state.isPaused);
+  assert.ok(pausedMutation);
+  const nextClient = replaceSessionQueryClient(client);
+  t.after(() => { client.clear(); nextClient.clear(); });
+  response.resolve(1);
+  await first;
+  // Clearing the retired mutation cache removes its scope queue. Explicitly
+  // continue the retired observer to verify that even a resumed write is rejected.
+  void pausedMutation.continue().catch(() => undefined);
+  await queuedResult;
+  assert.equal(callbacks, 0);
+  assert.equal(queuedWrites, 0);
 });

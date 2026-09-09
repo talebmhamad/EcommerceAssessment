@@ -139,3 +139,15 @@ test("API errors are surfaced as ApiClientError without raw failures", async () 
       error.code === "CONFLICT"
   );
 });
+
+test("a late response from a previous login is discarded", async () => {
+  installWindowStorage("previous-token");
+  let finish!: (response: Response) => void;
+  globalThis.fetch = (() => new Promise<Response>((resolve) => { finish = resolve; })) as typeof fetch;
+  const pending = addCartItem({ productId: 1, quantity: 1, variantId: 5 });
+  installWindowStorage("new-token");
+  finish(new Response(JSON.stringify({ success: true, data: { id: 10 } }), { status: 200 }));
+  await assert.rejects(pending, (error: unknown) =>
+    error instanceof ApiClientError && error.code === "SESSION_CHANGED"
+  );
+});

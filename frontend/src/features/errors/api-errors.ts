@@ -87,7 +87,7 @@ export function getFriendlyErrorMessage(
   }
 
   if (isApiUnavailableError(error)) {
-    return "The API is unavailable right now. Check that the backend is running and try again.";
+    return "We could not connect to the store. Please try again shortly.";
   }
 
   if (error instanceof ApiClientError) {

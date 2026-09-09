@@ -36,6 +36,7 @@ type RequestOptions = {
   body?: unknown;
   accessToken?: string | null;
   auth?: boolean;
+  signal?: AbortSignal;
 };
 
 async function request<TData>(
@@ -62,7 +63,8 @@ async function request<TData>(
     method: options.method ?? "GET",
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    cache: "no-store"
+    cache: "no-store",
+    signal: options.signal
   }).catch(() => {
     throw new ApiClientError(
       "The API is unavailable.",
@@ -78,6 +80,10 @@ async function request<TData>(
       "SERVICE_UNAVAILABLE"
     );
   })) as ApiResponse<TData>;
+
+  if (accessToken && options.auth !== false && accessToken !== getStoredAccessToken()) {
+    throw new ApiClientError("Your session has changed. Please sign in again.", 401, "SESSION_CHANGED");
+  }
 
   if (!response.ok || !payload.success) {
     if (payload.success === false) {
@@ -135,8 +141,8 @@ export function getProduct(productId: string | number): Promise<ProductDetail> {
   return request<ProductDetail>(`/products/${encodeURIComponent(productId)}`);
 }
 
-export function getCart(): Promise<Cart> {
-  return request<Cart>("/cart");
+export function getCart(options?: { signal?: AbortSignal }): Promise<Cart> {
+  return request<Cart>("/cart", { signal: options?.signal });
 }
 
 export function addCartItem(body: AddCartItemRequest): Promise<CartItem> {

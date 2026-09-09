@@ -48,7 +48,7 @@ export function OrderConfirmationView({
               <p className="eyebrow">Confirmation</p>
               <h1 id="order-title">Order confirmation</h1>
               <p className="lead">
-                Your order details are loaded from the stored checkout record.
+                View your confirmed items and order total.
               </p>
             </div>
           </section>

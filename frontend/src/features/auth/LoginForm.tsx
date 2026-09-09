@@ -79,7 +79,7 @@ export function LoginForm(): React.ReactElement {
         <p className="eyebrow">Account access</p>
         <h1 id="login-title">Sign in to continue.</h1>
         <p className="lead">
-          Use the demo account to access the protected ecommerce workspace.
+          Use the demo account to sign in and start shopping.
         </p>
       </div>
 

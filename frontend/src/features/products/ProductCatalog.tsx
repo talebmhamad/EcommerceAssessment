@@ -75,7 +75,7 @@ export function ProductCatalog(): React.ReactElement {
               <p className="eyebrow">Catalog</p>
               <h1 id="products-title">Products</h1>
               <p className="lead">
-                Browse the protected product catalog and choose an item to view
+                Browse our products and choose an item to view
                 its details.
               </p>
             </div>

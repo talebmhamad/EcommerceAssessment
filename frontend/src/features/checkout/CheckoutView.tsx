@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import {
+  useIsMutating,
   useMutation,
   useQuery,
   useQueryClient
@@ -10,7 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
-import { cartQueryKey } from "@/features/cart/cart-query";
+import { cartMutationKey, cartQueryKey, createCartMutationOptions } from "@/features/cart/cart-query";
 import {
   canPlaceCheckoutOrder,
   getStockLabel,
@@ -52,6 +53,7 @@ export function CheckoutView(): React.ReactElement {
   const queryClient = useQueryClient();
   const router = useRouter();
   const checkoutLockRef = useRef(false);
+  const isCartMutating = useIsMutating({ mutationKey: cartMutationKey }) > 0;
   const {
     data: cart,
     error: cartError,
@@ -62,34 +64,34 @@ export function CheckoutView(): React.ReactElement {
   } = useQuery({
     enabled: status === "authenticated",
     queryFn: getCart,
-    queryKey: cartQueryKey
+    queryKey: cartQueryKey,
+    refetchOnMount: "always"
   });
-  const checkoutMutation = useMutation({
+  const checkoutMutation = useMutation(createCartMutationOptions(queryClient, {
     mutationFn: placeOrder,
     onSuccess: (order) => {
       queryClient.setQueryData<Cart>(cartQueryKey, {
         items: [],
         total: "0.00"
       });
-      void queryClient.invalidateQueries({ queryKey: cartQueryKey });
       void queryClient.invalidateQueries({ queryKey: queryKeys.products });
       router.replace(`/orders/${order.id}/confirmation`);
     },
-    onSettled: () => {
+    onError: () => {
       checkoutLockRef.current = false;
     }
-  });
+  }));
 
   const stockIssue = hasStockIssue(cart);
   const cartItemCount = cart?.items.length ?? 0;
   const isCartEmpty = cartItemCount === 0;
   const canPlaceOrder = canPlaceCheckoutOrder(
     cart,
-    checkoutMutation.isPending
+    isCartMutating || isCartFetching || isCartError
   );
 
   function handlePlaceOrder(): void {
-    if (!canPlaceOrder || checkoutLockRef.current) {
+    if (!canPlaceOrder || checkoutLockRef.current || queryClient.isMutating({ mutationKey: cartMutationKey }) > 0) {
       return;
     }
 
@@ -106,8 +108,7 @@ export function CheckoutView(): React.ReactElement {
               <p className="eyebrow">Checkout</p>
               <h1 id="checkout-title">Review order</h1>
               <p className="lead">
-                Confirm the current cart totals from the server before placing
-                the order.
+                Review your items and total before placing your order.
               </p>
             </div>
           </section>

@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { AuthProvider } from "@/features/auth/AuthProvider";
-import { QueryProvider } from "@/features/query/QueryProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Ecommerce Assessment",
-  description: "Phase 1 foundation for a mini e-commerce platform"
+  description: "Browse products, save your favorites, and shop online."
 };
 
 export default function RootLayout({
@@ -16,9 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body suppressHydrationWarning>
-        <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </QueryProvider>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
-import { cartQueryKey } from "@/features/cart/cart-query";
+import { cartMutationKey, cartQueryKey, createCartMutationOptions } from "@/features/cart/cart-query";
 import { getFriendlyErrorMessage } from "@/features/errors/api-errors";
 import { queryKeys } from "@/features/query/query-keys";
 import { EmptyState } from "@/features/ui/EmptyState";
@@ -106,7 +106,7 @@ export function CartView(): React.ReactElement {
   const { status } = useAuth();
   const queryClient = useQueryClient();
   const isAuthenticated = status === "authenticated";
-  const lineLocksRef = useRef<Set<number>>(new Set());
+  const isCartMutating = useIsMutating({ mutationKey: cartMutationKey }) > 0;
   const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>(
     {},
   );
@@ -152,7 +152,7 @@ export function CartView(): React.ReactElement {
     queryClient.setQueryData(cartQueryKey, nextCart);
   };
 
-  const quantityMutation = useMutation({
+  const quantityMutation = useMutation(createCartMutationOptions(queryClient, {
     mutationFn: ({
       cartItemId,
       quantity,
@@ -161,11 +161,18 @@ export function CartView(): React.ReactElement {
       quantity: number;
     }) => updateCartItemQuantity(cartItemId, { quantity }),
     onSuccess: updateCartCache,
-    onSettled: (_data, _error, variables) => {
-      lineLocksRef.current.delete(variables.cartItemId);
+    onError: (_error, { cartItemId }) => {
+      const confirmedItem = queryClient.getQueryData<Cart>(cartQueryKey)?.items
+        .find((item) => item.id === cartItemId);
+      if (confirmedItem) {
+        setQuantityDrafts((drafts) => ({
+          ...drafts,
+          [cartItemId]: String(confirmedItem.quantity),
+        }));
+      }
     },
-  });
-  const variantMutation = useMutation({
+  }));
+  const variantMutation = useMutation(createCartMutationOptions(queryClient, {
     mutationFn: ({
       cartItemId,
       variantId,
@@ -174,44 +181,22 @@ export function CartView(): React.ReactElement {
       variantId: number;
     }) => changeCartItemVariant(cartItemId, { variantId }),
     onSuccess: updateCartCache,
-    onSettled: (_data, _error, variables) => {
-      lineLocksRef.current.delete(variables.cartItemId);
-    },
-  });
-  const removeMutation = useMutation({
+  }));
+  const removeMutation = useMutation(createCartMutationOptions(queryClient, {
     mutationFn: removeCartItem,
     onSuccess: updateCartCache,
-    onSettled: (_data, _error, variables) => {
-      lineLocksRef.current.delete(variables);
-    },
-  });
+  }));
 
   const mutationError =
     quantityMutation.error ?? variantMutation.error ?? removeMutation.error;
-  const pendingCartItemIds = useMemo(
-    () =>
-      new Set(
-        [
-          quantityMutation.variables?.cartItemId,
-          variantMutation.variables?.cartItemId,
-          removeMutation.variables,
-        ].filter((value): value is number => typeof value === "number"),
-      ),
-    [
-      quantityMutation.variables,
-      variantMutation.variables,
-      removeMutation.variables,
-    ],
-  );
+  function isCartBusy(): boolean {
+    return queryClient.isMutating({ mutationKey: cartMutationKey }) > 0;
+  }
 
-  function isLinePending(cartItemId: number): boolean {
-    return (
-      lineLocksRef.current.has(cartItemId) ||
-      (pendingCartItemIds.has(cartItemId) &&
-        (quantityMutation.isPending ||
-          variantMutation.isPending ||
-          removeMutation.isPending))
-    );
+  function resetMutationErrors(): void {
+    quantityMutation.reset();
+    variantMutation.reset();
+    removeMutation.reset();
   }
 
   function isQuantityPending(cartItemId: number): boolean {
@@ -249,7 +234,7 @@ export function CartView(): React.ReactElement {
   }
 
   function commitQuantity(item: CartLineItem): void {
-    if (isLinePending(item.id)) {
+    if (isCartBusy()) {
       return;
     }
 
@@ -267,7 +252,7 @@ export function CartView(): React.ReactElement {
       return;
     }
 
-    lineLocksRef.current.add(item.id);
+    resetMutationErrors();
     quantityMutation.mutate({
       cartItemId: item.id,
       quantity: nextQuantity,
@@ -275,7 +260,7 @@ export function CartView(): React.ReactElement {
   }
 
   function adjustQuantity(item: CartLineItem, delta: number): void {
-    if (isLinePending(item.id)) {
+    if (isCartBusy()) {
       return;
     }
 
@@ -288,7 +273,7 @@ export function CartView(): React.ReactElement {
       return;
     }
 
-    lineLocksRef.current.add(item.id);
+    resetMutationErrors();
     setQuantityDrafts((drafts) => ({
       ...drafts,
       [item.id]: String(nextQuantity),
@@ -300,11 +285,11 @@ export function CartView(): React.ReactElement {
   }
 
   function handleVariantChange(item: CartLineItem, variantId: number): void {
-    if (variantId === item.variant.id || isLinePending(item.id)) {
+    if (variantId === item.variant.id || isCartBusy()) {
       return;
     }
 
-    lineLocksRef.current.add(item.id);
+    resetMutationErrors();
     variantMutation.mutate({
       cartItemId: item.id,
       variantId,
@@ -312,11 +297,11 @@ export function CartView(): React.ReactElement {
   }
 
   function handleRemove(item: CartLineItem): void {
-    if (isLinePending(item.id)) {
+    if (isCartBusy()) {
       return;
     }
 
-    lineLocksRef.current.add(item.id);
+    resetMutationErrors();
     removeMutation.mutate(item.id);
   }
 
@@ -445,7 +430,7 @@ export function CartView(): React.ReactElement {
 
                   {cart.items.map((item) => {
                     const variants = getVariantOptions(products, item);
-                    const isPending = isLinePending(item.id);
+                    const isPending = isCartMutating;
                     const isUpdatingQuantity = isQuantityPending(item.id);
                     const isUpdatingVariant = isVariantPending(item.id);
                     const isRemoving = isRemovePending(item.id);
@@ -626,7 +611,15 @@ export function CartView(): React.ReactElement {
                       {formatCurrency(cart.total)}
                     </strong>
                   </div>
-                  <Link className={primaryButtonClassName} href="/checkout">
+                  <Link
+                    aria-disabled={isCartMutating}
+                    className={primaryButtonClassName}
+                    href="/checkout"
+                    onClick={(event) => {
+                      // An input blur may have started a save before this click.
+                      if (isCartBusy()) event.preventDefault();
+                    }}
+                  >
                     Checkout
                   </Link>
                   <Link className={secondaryButtonClassName} href="/products">
